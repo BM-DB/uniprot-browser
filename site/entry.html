@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Entry</title>
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- PDBe Mol* plugin (you can pin a version by replacing "latest" with a number, e.g. 3.1.0) -->
+  <script src="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-plugin.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar.css" />
+
+  <style>
+    /* Make the viewer fill a nice tall area */
+    #viewer-container {
+      width: 100%;
+      height: 640px;
+      border: 1px solid #ddd;
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html">← Back</a>
+  <h1 id="title"></h1>
+
+  <div id="viewer-container"></div>
+  <div id="err" style="color:#b00020; margin-top:8px;"></div>
+
+  <h2>Sequence (FASTA)</h2>
+  <pre id="fasta">Loading...</pre>
+
+  <script>
+    function getParam(name){ return new URL(location.href).searchParams.get(name); }
+
+    async function load(){
+      const uid = getParam('uid');
+      const errEl = document.getElementById('err');
+      document.getElementById('title').textContent = uid || '(missing uid)';
+
+      // Load catalog (cache-busted)
+      const catalog = await fetch('../data/entries.json?b=molstar').then(r => r.json()).catch(() => null);
+      if(!catalog){ errEl.textContent = 'Could not load entries.json.'; return; }
+
+      const entry = catalog.entries.find(e => e.uniprot_id === uid);
+      if(!entry){ errEl.textContent = 'Entry not found in catalog.'; return; }
+
+      // Show FASTA text (best-effort)
+      fetch(entry.files.sequence_fasta)
+        .then(r => r.text())
+        .then(t => { document.getElementById('fasta').textContent = t; })
+        .catch(() => { document.getElementById('fasta').textContent = 'FASTA not available.'; });
+
+      // --- PDBe Mol* viewer ---
+      try {
+        const viewer = new PDBeMolstarPlugin();
+        // Try mmcif first; if it fails, retry as cif
+        const renderOptions = (fmt) => ({
+          customData: { url: entry.files.structure_cif, format: fmt },
+          ui: true,                 // show controls
+          bgColor: { r: 255, g:255, b:255 }, // white background
+        });
+
+        try {
+          viewer.render('viewer-container', renderOptions('mmcif'));
+        } catch(e1) {
+          console.warn('PDBe mmcif failed, retrying as cif', e1);
+          viewer.render('viewer-container', renderOptions('cif'));
+        }
+      } catch (e) {
+        console.error('PDBe Mol* failed', e);
+        errEl.textContent = 'Could not load the 3D viewer.';
+      }
+    }
+
+    load();
+  </script>
+</body>
+</html>
