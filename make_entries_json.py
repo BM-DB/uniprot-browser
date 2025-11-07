@@ -1,61 +1,54 @@
-# make_entries_json.py
+# make_entries_json.py  — Option B (repo-root aware, robust CSV)
 import csv, json, re
 from pathlib import Path
 
-# === CONFIGURE THESE VALUES ===
+# === CONFIGURE THESE VALUES (pre-filled from your setup) ===
 CSV_PATH    = Path('/Users/aplab/Desktop/000 - Boltz-2 individual/input UniProt ID test.csv')
-DATA_PARENT = Path('/Users/aplab/Desktop/000 - Boltz-2 individual/GitHub Test Dataset/uniprot-data/UniProt-Dataset')
+REPO_ROOT   = Path('/Users/aplab/Desktop/000 - Boltz-2 individual/GitHub Test Dataset/uniprot-data')  # repo root
+DATA_PARENT = REPO_ROOT / 'UniProt-Dataset'  # ID folders live under this subfolder
+
 GH_USER     = 'BM-DB'
-DATA_REPO   = "uniprot-data"
-DATA_BRANCH = "main"   # usually "main"
+DATA_REPO   = 'uniprot-data'
+DATA_BRANCH = 'main'   # branch name on GitHub
 OUTPUT_JSON = Path('/Users/aplab/Desktop/000 - Boltz-2 individual/GitHub Test Browser/uniprot-browser/data/entries.json')
-# ==============================
+# ===========================================================
 
 RAW_BASE = f"https://raw.githubusercontent.com/{GH_USER}/{DATA_REPO}/{DATA_BRANCH}"
 
 def normalize_header(s: str) -> str:
     # strip, collapse spaces, replace NBSP, lower
-    s = (s or "").replace("\u00A0", " ")   # NBSP -> space
+    s = (s or "").replace("\u00A0", " ")
     s = " ".join(s.strip().split())
     return s.lower()
 
 def sniff_dialect(sample_bytes: bytes):
     try:
-        # csv.Sniffer works on str, so decode first (keep errors='ignore' just for sniffing)
         sample_text = sample_bytes.decode("utf-8", errors="ignore")
-        return csv.Sniffer().sniff(sample_text, delimiters=[",",";","\t","|"])
+        return csv.Sniffer().sniff(sample_text, delimiters=[",", ";", "\t", "|"])
     except Exception:
-        # fallback to comma
         d = csv.excel()
         d.delimiter = ","
         return d
 
 def open_csv_reader(path: Path):
-    # Read a sample to sniff delimiter
+    # sniff delimiter using a small sample
     with path.open("rb") as fb:
         sample = fb.read(4096)
     dialect = sniff_dialect(sample)
-
-    # Now open text with BOM handling; newline='' lets csv handle newlines correctly
+    # open text with BOM handling
     f = path.open("r", encoding="utf-8-sig", newline="")
     reader = csv.DictReader(f, dialect=dialect)
     return f, reader
 
 def locate_uid_field(fieldnames):
     norm_map = {normalize_header(h): h for h in fieldnames if h is not None}
-    # Accept common variants
-    candidates = [
-        "uniprot id",        # expected
-        "uniprot_id",        # underscore variant
-        "uniprot accession", # just in case
-        "id",                # last-ditch
-    ]
-    for key in candidates:
+    for key in ("uniprot id", "uniprot_id", "uniprot accession", "id"):
         if key in norm_map:
             return norm_map[key]
     return None
 
 def find_files_for(uid: str):
+    """Return repo-root-relative paths (as POSIX strings) for CIF and FASTA, or (None, None)."""
     id_root = DATA_PARENT / uid
     if not id_root.is_dir():
         return None, None
@@ -70,9 +63,16 @@ def find_files_for(uid: str):
     if boltz_dir.is_dir():
         for f in boltz_dir.rglob("*"):
             if f.is_file() and f.suffix.lower() in (".cif", ".mmcif"):
-                if re.search(rf"monomer_Boltz-2_{re.escape(uid)}", f.name):
+                if re.search(rf"^monomer_Boltz-2_{re.escape(uid)}(\.|_|-)", f.name) or f.name == f"monomer_Boltz-2_{uid}.cif" or f.name == f"monomer_Boltz-2_{uid}.mmcif":
                     cif_path = f
                     break
+        if cif_path is None:
+            # fallback: any cif/mmcif containing the uid
+            for f in boltz_dir.rglob("*"):
+                if f.is_file() and f.suffix.lower() in (".cif", ".mmcif"):
+                    if uid in f.name:
+                        cif_path = f
+                        break
 
     # FASTA: exactly <UID>.fasta under seq_dir
     if seq_dir.is_dir():
@@ -83,9 +83,10 @@ def find_files_for(uid: str):
     if not (cif_path and fasta_path):
         return None, None
 
+    # Return paths relative to the REPO_ROOT (matches GitHub tree)
     return (
-        cif_path.relative_to(DATA_PARENT).as_posix(),
-        fasta_path.relative_to(DATA_PARENT).as_posix(),
+        cif_path.relative_to(REPO_ROOT).as_posix(),
+        fasta_path.relative_to(REPO_ROOT).as_posix(),
     )
 
 def main():
@@ -95,20 +96,19 @@ def main():
     with f:
         uid_field = locate_uid_field(reader.fieldnames or [])
         if not uid_field:
-            # Helpful debug print so you can see what Python actually sees
             print("DEBUG fieldnames seen by csv module:", reader.fieldnames)
             raise AssertionError("Could not find a 'UniProt ID' column (case/space-insensitive).")
 
         for row in reader:
-            raw_val = row.get(uid_field, "")
-            uid = str(raw_val).strip()
+            uid = str(row.get(uid_field, "")).strip()
             if not uid:
-                continue  # skip empty rows
+                continue  # skip blank rows
 
-            cif_rel, fasta_rel = find_files_for(uid)
-            if not (cif_rel and fasta_rel):
+            paths = find_files_for(uid)
+            if not paths:
                 missing.append(uid)
                 continue
+            cif_rel, fasta_rel = paths
 
             entries.append({
                 "uniprot_id": uid,  # keep EXACT string (e.g., P05067 vs P05067-4)
