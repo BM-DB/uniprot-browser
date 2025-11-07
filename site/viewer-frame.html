@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mol* Viewer Frame</title>
+
+  <!-- Pin PDBe Mol* plugin for stability; change version if you prefer -->
+  <script src="https://cdn.jsdelivr.net/npm/pdbe-molstar@3.1.0/build/pdbe-molstar-plugin.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@3.1.0/build/pdbe-molstar.css" />
+
+  <style>
+    html, body { margin: 0; height: 100%; width: 100%; }
+    #viewer-container { width: 100%; height: 100%; }
+  </style>
+</head>
+<body>
+  <div id="viewer-container"></div>
+  <script>
+    const viewer = new PDBeMolstarPlugin();
+
+    function getParam(name){
+      return new URL(location.href).searchParams.get(name);
+    }
+
+    function renderUrl(url){
+      if(!url) {
+        console.error('viewer-frame: missing ?url= param');
+        return;
+      }
+      // Try mmcif first, then cif
+      try {
+        viewer.render('viewer-container', {
+          customData: { url, format: 'mmcif' },
+          ui: true,
+          bgColor: { r:255, g:255, b:255 },
+        });
+      } catch(e1) {
+        console.warn('PDBe mmcif failed, retrying as cif', e1);
+        try {
+          viewer.render('viewer-container', {
+            customData: { url, format: 'cif' },
+            ui: true,
+            bgColor: { r:255, g:255, b:255 },
+          });
+        } catch(e2) {
+          console.error('PDBe cif failed', e2);
+        }
+      }
+    }
+
+    // Initial empty scene to size the container nicely
+    viewer.render('viewer-container', { ui: true, bgColor: { r:255, g:255, b:255 } });
+
+    // Render from query param
+    const url = getParam('url');
+    renderUrl(url);
+
+    // (Optional fallback) still listen for postMessage if you ever need it
+    window.addEventListener('message', (event) => {
+      const u = event.data && (event.data.url || event.data);
+      if(u) renderUrl(u);
+    }, false);
+  </script>
+</body>
+</html>
