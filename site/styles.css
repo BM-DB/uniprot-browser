@@ -1,0 +1,8 @@
+body { font-family: -apple-system, system-ui, sans-serif; margin: 2rem; }
+h1 { margin-bottom: 1rem; }
+#search { padding: 0.5rem; width: 320px; }
+.card { border: 1px solid #e6e6e6; padding: 0.75rem 1rem; margin-top: 0.75rem;
+        border-radius: 10px; display: flex; justify-content: space-between; align-items: center; }
+.card .id { font-weight: 600; }
+.card .links a { margin-left: 0.75rem; }
+pre { white-space: pre-wrap; }
