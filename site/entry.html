@@ -1,1 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Entry</title>
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    .viewer-card {
+      width: 100%;
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    #viewer-frame {
+      width: 100%;
+      height: 640px;  /* adjust height to taste */
+      border: 0;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <a href="index.html">← Back</a>
+  <h1 id="title"></h1>
+
+  <div class="viewer-card">
+    <iframe id="viewer-frame" src="viewer-frame.html"></iframe>
+  </div>
+  <div id="err" style="color:#b00020; margin-top:8px;"></div>
+
+  <h2>Sequence (FASTA)</h2>
+  <pre id="fasta">Loading...</pre>
+
+  <script>
+    function getParam(name){ return new URL(location.href).searchParams.get(name); }
+
+    async function load(){
+      const uid = getParam('uid');
+      const errEl = document.getElementById('err');
+      document.getElementById('title').textContent = uid || '(missing uid)';
+
+      // Load catalog (cache-busted)
+      const catalog = await fetch('../data/entries.json?v=iframe2').then(r=>r.json()).catch(()=>null);
+      if(!catalog){ errEl.textContent = 'Could not load entries.json.'; return; }
+
+      const entry = catalog.entries.find(e => e.uniprot_id === uid);
+      if(!entry){ errEl.textContent = 'Entry not found in catalog.'; return; }
+
+      // Show FASTA
+      fetch(entry.files.sequence_fasta)
+        .then(r=>r.text())
+        .then(t => { document.getElementById('fasta').textContent = t; })
+        .catch(() => { document.getElementById('fasta').textContent = 'FASTA not available.'; });
+
+      // Send the structure URL into the iframe AFTER it finishes loading
+      const frame = document.getElementById('viewer-frame');
+      frame.addEventListener('load', () => {
+        frame.contentWindow.postMessage({ url: entry.files.structure_cif }, '*');
+      }, { once: true });
+    }
+
+    load();
+  </script>
+</body>
+</html>
 
