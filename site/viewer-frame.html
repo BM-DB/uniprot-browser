@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mol* Viewer Frame</title>
+
+  <!-- Use the same CDN as your working example -->
+  <script src="https://unpkg.com/pdbe-molstar@latest/build/pdbe-molstar-plugin.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/pdbe-molstar@latest/build/pdbe-molstar.css" />
+
+  <style>
+    html, body { margin: 0; height: 100%; width: 100%; }
+    #viewer-container { width: 100%; height: calc(100% - 28px); }
+    #status { font: 12px/28px -apple-system, system-ui, sans-serif; padding: 0 8px; color: #555; border-bottom: 1px solid #eee; }
+  </style>
+</head>
+<body>
+  <div id="status">loading…</div>
+  <div id="viewer-container"></div>
+
+  <script>
+    const log = (msg) => { const s = document.getElementById('status'); s.textContent = msg; console.log('[viewer-frame]', msg); };
+    const params = new URL(location.href).searchParams;
+    const pdb = params.get('pdb');
+    const url = params.get('url');
+
+    const viewer = new PDBeMolstarPlugin();
+
+    // Always render once to initialize UI
+    viewer.render('viewer-container', { ui: true, bgColor: { r:255, g:255, b:255 } });
+
+    (async () => {
+      try {
+        if (pdb) {
+          log(`loading PDB: ${pdb}`);
+          viewer.render('viewer-container', { moleculeId: pdb, ui: true, bgColor: { r:255, g:255, b:255 } });
+          return;
+        }
+
+        if (url) {
+          log('loading from URL (mmcif)…');
+          try {
+            viewer.render('viewer-container', { customData: { url, format: 'mmcif' }, ui: true, bgColor: { r:255, g:255, b:255 } });
+            log('loaded as mmcif');
+          } catch (e1) {
+            console.warn('mmcif failed, retrying as cif', e1);
+            log('loading from URL (cif)…');
+            viewer.render('viewer-container', { customData: { url, format: 'cif' }, ui: true, bgColor: { r:255, g:255, b:255 } });
+            log('loaded as cif');
+          }
+          return;
+        }
+
+        log('no ?pdb= or ?url= given');
+      } catch (e) {
+        console.error('viewer error', e);
+        log('error — open console');
+      }
+    })();
+  </script>
+</body>
+</html>
