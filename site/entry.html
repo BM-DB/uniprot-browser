@@ -1,0 +1,66 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Entry</title>
+  <link rel="stylesheet" href="styles.css" />
+  <!-- Mol* -->
+  <script src="https://unpkg.com/molstar/build/viewer/molstar.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/molstar/build/viewer/molstar.css" />
+</head>
+<body>
+  <a href="index.html">← Back</a>
+  <h1 id="title"></h1>
+
+  <div id="viewer" style="width:100%; height:600px; border:1px solid #ddd;"></div>
+  <div id="err" style="color:#b00020; margin-top:8px;"></div>
+
+  <h2>Sequence (FASTA)</h2>
+  <pre id="fasta">Loading...</pre>
+
+  <script>
+    function getParam(name){ return new URL(location.href).searchParams.get(name); }
+
+    async function load(){
+      const uid = getParam('uid');
+      const catalog = await fetch('../data/entries.json?b=3').then(r => r.json());
+      const entry = catalog.entries.find(e => e.uniprot_id === uid);
+      const err = document.getElementById('err');
+
+      if(!entry){
+        document.body.innerHTML = "Not found";
+        return;
+      }
+
+      document.getElementById('title').textContent = uid;
+
+      // Show FASTA text
+      fetch(entry.files.sequence_fasta)
+        .then(r => r.text())
+        .then(t => { document.getElementById('fasta').textContent = t; })
+        .catch(e => { document.getElementById('fasta').textContent = 'FASTA not available.'; });
+
+      // Mol* viewer
+      const viewer = new molstar.Viewer('viewer', { layoutIsExpanded:false, layoutShowControls:true });
+
+      // Try mmcif first, then fallback to cif
+      try {
+        await viewer.loadStructureFromUrl(entry.files.structure_cif, 'mmcif');
+      } catch (e1) {
+        console.warn('mmcif failed, retrying as cif', e1);
+        try {
+          await viewer.loadStructureFromUrl(entry.files.structure_cif, 'cif');
+        } catch (e2) {
+          console.error('cif also failed', e2);
+          err.textContent = 'Could not load structure (tried mmCIF then CIF). See Console for details.';
+          return;
+        }
+      }
+
+      viewer.resetCamera();
+    }
+
+    load();
+  </script>
+</body>
+</html>
