@@ -1,4 +1,3 @@
-<!-- site/entry.html — replace entire file -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -14,11 +13,20 @@
       margin-bottom: 16px;
       background: #fff;
     }
-    #viewer-frame { width: 100%; height: 640px; border: 0; display: block; }
-    .meta { display: flex; gap: 12px; align-items: center; margin: 8px 0 16px; }
+    #viewer-frame {
+      width: 100%;
+      height: 640px;  /* adjust height if you want */
+      border: 0;
+      display: block;
+    }
+    .meta {
+      display: flex; gap: 12px; align-items: center;
+      margin: 8px 0 16px;
+    }
     .meta a { text-decoration: none; }
     .error { color:#b00020; margin-top:8px; }
     .btn { padding: 6px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; }
+    pre { white-space: pre-wrap; }
   </style>
 </head>
 <body>
@@ -26,7 +34,7 @@
   <h1 id="title"></h1>
 
   <div class="viewer-card">
-    <iframe id="viewer-frame" src="about:blank"></iframe>
+    <iframe id="viewer-frame" src="about:blank" title="Mol* Viewer"></iframe>
   </div>
 
   <div class="meta">
@@ -56,7 +64,7 @@
 
       titleEl.textContent = uid || '(missing uid)';
 
-      // cache-bust catalog
+      // Load catalog with a cache-buster
       let catalog;
       try {
         catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r=>r.json());
@@ -85,13 +93,12 @@
         copyBtn.disabled = true;
       }
 
-      // Point the iframe to viewer-frame.html with the CIF URL as query param
+      // Point the iframe at the Mol* core minimal viewer with the CIF URL
       const encodedUrl = encodeURIComponent(entry.files.structure_cif);
-      frame.src = `viewer-frame.html?url=${encodedUrl}&v=1`;
+      frame.src = `viewer-core.html?url=${encodedUrl}&v=coremin`;
     }
 
     load();
   </script>
 </body>
 </html>
-
