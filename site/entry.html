@@ -99,16 +99,10 @@
       // Prefer mmCIF; if you KNOW some are legacy PDB/CIF, change 'mmcif' to 'cif' for those.
       const encodedCif = encodeURIComponent(cifUrl);
       const viewerUrl =
-        `https://molstar.org/viewer/?url=${encodedCif}` +
-        `&format=mmcif` +
-        `&hide-ui=1` +                      // removes interface panels
-        `&representation=cartoon` +         // cartoon/ribbon representation
-        `&color-theme=uniform` +            // one color
-        `&color-value=0x4682B4` +           // steel blue (you can change this hex)
-        `&bgcolor=white` +                  // white background
-        `&lighting=soft` +                  // soft lighting
-        `&outline=1`;                       // enable black outline
+        `https://molstar.org/viewer/?structure-url=${encodedCif}` +
+        `&structure-url-format=mmcif&hide-controls=1`;
 
+      
       // Load into the iframe
       frame.src = viewerUrl;
     }
