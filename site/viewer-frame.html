@@ -2,72 +2,53 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Mol* Viewer Frame (Minimal)</title>
+  <title>Mol* Minimal Viewer</title>
 
-  <!-- Pin a stable PDBe Mol* plugin version -->
+  <!-- Use a fixed PDBe Mol* version -->
   <script src="https://unpkg.com/pdbe-molstar@3.1.0/build/pdbe-molstar-plugin.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/pdbe-molstar@3.1.0/build/pdbe-molstar.css" />
 
   <style>
-    html, body { margin: 0; height: 100%; width: 100%; }
-    #viewer-container { width: 100%; height: 100%; }
-
-    /* Safety net: hide any residual UI if the plugin adds it */
-    .msp-controls,
-    .msp-right-panel,
-    .msp-left-panel,
-    .msp-bottom-panel,
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #fff;
+      overflow: hidden;
+    }
+    #viewer-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    /* Hide any residual control panels */
     .msp-layout-controls,
-    .msp-help-toast { display: none !important; }
-
-    /* Make sure the viewport fills the box */
-    #viewer-container .msp-viewport,
-    #viewer-container canvas {
-      width: 100% !important;
-      height: 100% !important;
-      max-width: 100% !important;
-      max-height: 100% !important;
+    .msp-help-toast,
+    .msp-viewport-controls,
+    .msp-plugin-ui {
+      display: none !important;
     }
   </style>
 </head>
 <body>
   <div id="viewer-container"></div>
   <script>
-    const viewer = new PDBeMolstarPlugin();
-
     function getParam(name){ return new URL(location.href).searchParams.get(name); }
     const url = getParam('url');
-    const fmt = getParam('format'); // optional override: 'cif' or 'mmcif'
+    const format = getParam('format') || 'cif';
+    const viewer = new PDBeMolstarPlugin();
 
-    // 1) Initialize with no UI so only the rendering viewport shows
+    // Render only the molecule viewport, no UI
     viewer.render('viewer-container', {
-      ui: false,                         // << minimal mode
+      customData: { url, format },
+      ui: false,
+      layoutIsExpanded: false,
       layoutShowControls: false,
       viewportShowExpand: false,
-      layoutIsExpanded: false,
-      bgColor: { r:255, g:255, b:255 }
+      bgColor: { r: 255, g: 255, b: 255 },
+      powerPreference: 'high-performance',
+      graphicsMode: 'quality'
     });
-
-    // 2) Load the structure (try mmcif then cif unless format is forced)
-    function load(format){
-      return viewer.render('viewer-container', {
-        ui: false,
-        layoutShowControls: false,
-        viewportShowExpand: false,
-        layoutIsExpanded: false,
-        bgColor: { r:255, g:255, b:255 },
-        ...(url ? { customData: { url, format } } : {})
-      });
-    }
-
-    if (url) {
-      if (fmt) {
-        load(fmt);
-      } else {
-        try { load('mmcif'); }
-        catch(e1) { try { load('cif'); } catch(e2) { /* noop */ } }
-      }
-    }
   </script>
 </body>
 </html>
