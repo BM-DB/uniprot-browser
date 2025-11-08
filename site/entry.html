@@ -20,7 +20,7 @@
 
     /* 2-column layout */
     .main {
-      height: calc(100vh - 54px); /* header height allowance */
+      height: calc(100vh - 54px);
       display: flex;
       gap: var(--gap);
       padding: var(--gap);
@@ -41,18 +41,14 @@
     #viewer-wrap { position: relative; flex: 1 1 auto; }
     #viewer { position: absolute; inset: 0; }
     #viewer .msp-viewport, #viewer canvas {
-      width: 100% !important;
-      height: 100% !important;
-      max-width: 100% !important;
-      max-height: 100% !important;
+      width: 100% !important; height: 100% !important;
+      max-width: 100% !important; max-height: 100% !important;
     }
-    /* Hide Mol* UI chrome to keep a clean canvas */
+    /* Hide Mol* UI chrome */
     .msp-left-panel,.msp-right-panel,.msp-bottom-panel,
     .msp-layout-controls,.msp-viewport-controls,
     .msp-plugin-ui,.msp-controls,.msp-controls-wrapper,.msp-help-toast {
-      display: none !important;
-      visibility: hidden !important;
-      pointer-events: none !important;
+      display: none !important; visibility: hidden !important; pointer-events: none !important;
     }
 
     /* Right: sequence panel */
@@ -76,26 +72,19 @@
       user-select: none;
     }
     .res {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      height: 22px;
-      min-width: 16px;
-      padding: 0 4px;
-      border-radius: 4px;
-      cursor: pointer;
-      border: 1px solid transparent;
+      display: inline-flex; align-items: center; justify-content: center;
+      height: 22px; min-width: 16px; padding: 0 4px; border-radius: 4px;
+      cursor: pointer; border: 1px solid transparent;
       transition: background 80ms ease, border-color 80ms ease;
-      font-size: 13px;
-      line-height: 1;
+      font-size: 13px; line-height: 1;
     }
     .res:hover { background: #eef3ff; border-color: #c8d8ff; }
     .res.active { background: #dfe8ff; border-color: var(--accent); }
     .res.dim { opacity: 0.35; }
-    .res-label { color: #666; margin-left: 6px; font-size: 12px; }
-
     .legend { margin: 8px 0 0; color: #666; font-size: 12px; }
+
     .error { color: #b00020; padding: 8px 12px; border-top: 1px solid var(--card-border); background: #fff7f7; display:none; }
+    .spacer { flex: 1 1 auto; }
   </style>
 </head>
 <body>
@@ -118,11 +107,11 @@
         <a id="cifLink"   target="_blank" rel="noopener">CIF</a>
         <a id="fastaLink" target="_blank" rel="noopener">FASTA</a>
         <button id="copyBtn" class="btn" type="button">Copy FASTA</button>
-        <span style="flex:1"></span>
+        <span class="spacer"></span>
         <button id="clearSelBtn" class="btn secondary" type="button">Clear Selection</button>
       </div>
       <div class="seq-body">
-        <div id="seqGrid" class="seq-grid" aria-label="Protein sequence (click a residue to select)"></div>
+        <div id="seqGrid" class="seq-grid" aria-label="Protein sequence (click/shift/ctrl to select)"></div>
         <div class="legend" id="seqLegend"></div>
       </div>
       <div id="seq-error" class="error"></div>
@@ -176,26 +165,17 @@
         seqErr.textContent = 'FASTA not available.';
       }
 
-      // Extract first non-header line(s) into plain sequence
       const lines = FASTA.split(/\r?\n/).filter(Boolean);
       const header = lines[0]?.startsWith('>') ? lines[0] : null;
       const seq = (header ? lines.slice(1) : lines).join('').replace(/\s+/g,'');
       seqLegend.textContent = header ? header : '';
-      copyBtn.onclick = async () => {
-        try {
-          await navigator.clipboard.writeText(FASTA);
-          const prev = copyBtn.textContent;
-          copyBtn.textContent = 'Copied!';
-          setTimeout(()=> (copyBtn.textContent = prev), 1200);
-        } catch {}
-      };
 
-      // Render sequence as clickable residues
+      // Render residues
       seqGrid.innerHTML = '';
       const resEls = [];
       for (let i = 0; i < seq.length; i++) {
         const aa = seq[i];
-        const pos = i + 1; // 1-based index
+        const pos = i + 1; // 1-based
         const span = document.createElement('span');
         span.className = 'res';
         span.textContent = aa;
@@ -205,7 +185,36 @@
         resEls.push(span);
       }
 
-      // Hover highlight (sequence-side)
+      // Selection state
+      const selected = new Set();   // of 1-based positions
+      let lastClickedPos = null;
+
+      function renderSelectionDim() {
+        if (selected.size === 0) {
+          resEls.forEach(el => { el.classList.remove('dim','active'); });
+          return;
+        }
+        resEls.forEach(el => {
+          const pos = Number(el.dataset.pos);
+          const isSel = selected.has(pos);
+          el.classList.toggle('active', isSel);
+          el.classList.toggle('dim', !isSel);
+        });
+      }
+
+      function addPos(pos){ selected.add(pos); }
+      function removePos(pos){ selected.delete(pos); }
+      function addRange(a,b){
+        const [lo,hi] = a <= b ? [a,b] : [b,a];
+        for(let p=lo;p<=hi;p++) selected.add(p);
+      }
+      function clearSelection(){
+        selected.clear();
+        renderSelectionDim();
+        try { pdbe.visual?.clearSelection?.(); } catch {}
+      }
+
+      // Hover
       seqGrid.addEventListener('mouseover', e => {
         const t = e.target;
         if (!(t instanceof HTMLElement) || !t.classList.contains('res')) return;
@@ -216,6 +225,17 @@
         if (!(t instanceof HTMLElement) || !t.classList.contains('res')) return;
         t.classList.remove('active');
       });
+
+      // Copy FASTA
+      copyBtn.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(FASTA || seq);
+          const prev = copyBtn.textContent;
+          copyBtn.textContent = 'Copied!';
+          setTimeout(()=> (copyBtn.textContent = prev), 1200);
+        } catch {}
+      };
+      clearBtn.onclick = () => clearSelection();
 
       // ===== Left: PDBe Mol* viewer (direct) =====
       const fmt = (cifUrl.toLowerCase().endsWith('.cif') && !cifUrl.toLowerCase().endsWith('.mmcif')) ? 'cif' : 'mmcif';
@@ -230,8 +250,7 @@
       try {
         pdbe.render('viewer', {
           customData: { url: cifUrl, format: fmt },
-          hideControls: true,
-          expanded: false,
+          hideControls: true, expanded: false,
           bgColor: { r:255, g:255, b:255 }
         });
       } catch {
@@ -240,7 +259,7 @@
         return;
       }
 
-      // Keep viewer chrome hidden defensively
+      // Keep viewer chrome hidden
       const root = document.getElementById('viewer');
       const hideChrome = () => {
         [
@@ -256,7 +275,7 @@
       hideChrome(); setTimeout(hideChrome, 100); setTimeout(hideChrome, 500);
       new MutationObserver(hideChrome).observe(root, { childList:true, subtree:true });
 
-      // Best-effort: mild ambient lighting + outline and uniform color
+      // Mild ambient + outline + uniform color (best-effort)
       function styleScene() {
         try {
           const plugin = pdbe?.viewerInstance?.plugin;
@@ -267,7 +286,6 @@
               postprocessing: { outline: { enable: true, scale: 1.0, threshold: 0.8 } }
             });
           }
-          // Uniform color (steel blue)
           const reps = plugin?.managers?.structure?.representation?.componentReprs || [];
           const val = { r: 70/255, g: 130/255, b: 180/255 };
           reps.forEach(cr => { try { cr.setTheme?.({ color: { name: 'uniform', params: { value: val } } }); } catch {} });
@@ -276,68 +294,106 @@
       setTimeout(styleScene, 400);
       setTimeout(styleScene, 1200);
 
-      // ===== Link sequence clicks to 3D selection (best-effort) =====
-      // Strategy:
-      // 1) On first click, we try to discover a polymer chainId to target (often 'A').
-      // 2) Then call pdbe.visual.select(...) to focus residueNumber = position.
-      // If API is unavailable or chainId unknown, we degrade gracefully (sequence stays interactive).
-      let discoveredChainId = null;
-      async function discoverChainIdOnce() {
-        if (discoveredChainId) return discoveredChainId;
+      // ===== Map sequence positions -> correct chain & residue numbers =====
+      // We try to discover a suitable polymer chain and confirm that "pos" ~ label_seq_id.
+      let chainIdGuess = 'A';
+      let seqIdLooks1Based = true;
+
+      function discoverMapping() {
         try {
-          // Try to infer chainId from underlying Mol* data (first polymer)
           const plugin = pdbe?.viewerInstance?.plugin;
           const structures = plugin?.managers?.structure?.hierarchy?.current?.structures || [];
           const first = structures[0];
-          const tree = first?.cell?.obj?.data?.model?.atomicHierarchy;
-          const label_asym_id = tree?.chains?.label_asym_id?.toArray?.();
-          if (label_asym_id && label_asym_id.length) {
-            // Pick the most frequent chain id among polymers
-            // (simple heuristic; works for single-chain monomers)
-            const counts = {};
-            for (const id of label_asym_id) counts[id] = (counts[id]||0)+1;
-            discoveredChainId = Object.keys(counts).sort((a,b)=>counts[b]-counts[a])[0];
+          const ah = first?.cell?.obj?.data?.model?.atomicHierarchy;
+          if (!ah) return;
+
+          // pick the polymer chain with most residues
+          const chains = ah?.chains;
+          const residues = ah?.residues;
+          const chainIdxBeg = chains?.offsets?.index ?? chains?.offsets?.indices;
+          const chainIdxEnd = chains?.offsets?.end ?? chains?.offsets?.indicesEnd;
+          const label_asym_id = chains?.label_asym_id?.toArray?.();
+          const label_seq_id = residues?.label_seq_id?.toArray?.();
+
+          if (label_asym_id && chainIdxBeg && chainIdxEnd) {
+            let best = { id: 'A', len: -1 };
+            for (let c = 0; c < label_asym_id.length; c++) {
+              const beg = chainIdxBeg[c] ?? 0;
+              const end = chainIdxEnd[c] ?? beg;
+              const len = Math.max(0, end - beg);
+              if (len > best.len) best = { id: label_asym_id[c], len };
+            }
+            if (best.len > 0) chainIdGuess = best.id;
           }
-        } catch {}
-        // Fallback to 'A' (typical single-chain)
-        if (!discoveredChainId) discoveredChainId = 'A';
-        return discoveredChainId;
+
+          // Heuristic: if label_seq_id starts at 1 for polymers, assume seq pos == label_seq_id
+          if (label_seq_id && label_seq_id.length) {
+            const min = Math.min(...label_seq_id.filter(n => Number.isFinite(n)));
+            seqIdLooks1Based = (min === 1);
+          }
+        } catch {
+          /* keep defaults */
+        }
+      }
+      // Try mapping after the scene settles
+      setTimeout(discoverMapping, 500);
+      setTimeout(discoverMapping, 1500);
+
+      // Build PDBe selection data from Set of positions
+      function buildSelectionData() {
+        // If label_seq_id is 1-based (typical), use pos directly.
+        // If not, we could offset — but for now we keep pos as residueNumber.
+        const data = [];
+        for (const pos of selected) {
+          data.push({ chainId: chainIdGuess, residueNumber: pos });
+        }
+        return data;
       }
 
-      function dimNonSelected(selectedPos) {
-        resEls.forEach(el => {
-          const pos = Number(el.dataset.pos);
-          el.classList.toggle('dim', selectedPos ? pos !== selectedPos : false);
-          el.classList.toggle('active', selectedPos ? pos === selectedPos : false);
-        });
-      }
-
-      async function selectResidueIn3D(pos) {
-        // Try PDBe selection API
+      function pushSelectionTo3D({ focus = false } = {}) {
         try {
-          const chainId = await discoverChainIdOnce();
-          // PDBe visual selection (schema commonly supported)
-          // If unsupported in the pinned version, this call is a no-op.
+          const data = buildSelectionData();
+          if (data.length === 0) {
+            pdbe.visual?.clearSelection?.();
+            return;
+          }
           pdbe.visual?.select?.({
-            data: [{ chainId, residueNumber: pos }],
+            data,
             nonSelectedOpacity: 0.25,
-            focus: true
+            focus
           });
-        } catch {}
+        } catch {
+          /* no-op if API not available */
+        }
       }
 
-      seqGrid.addEventListener('click', async e => {
+      // ===== Sequence click handling (single / range / toggle) =====
+      seqGrid.addEventListener('click', e => {
         const t = e.target;
         if (!(t instanceof HTMLElement) || !t.classList.contains('res')) return;
         const pos = Number(t.dataset.pos);
-        dimNonSelected(pos);
-        await selectResidueIn3D(pos);
-      });
 
-      clearBtn.onclick = () => {
-        dimNonSelected(null);
-        try { pdbe.visual?.clearSelection?.(); } catch {}
-      };
+        const isMeta = e.metaKey || e.ctrlKey;  // toggle single
+        const isRange = e.shiftKey;             // select range from last
+
+        if (!isMeta && !isRange) {
+          // Single selection
+          selected.clear();
+          addPos(pos);
+          lastClickedPos = pos;
+        } else if (isRange && lastClickedPos != null) {
+          addRange(lastClickedPos, pos);
+          lastClickedPos = pos;
+        } else if (isMeta) {
+          // Toggle
+          if (selected.has(pos)) removePos(pos);
+          else addPos(pos);
+          lastClickedPos = pos;
+        }
+
+        renderSelectionDim();
+        pushSelectionTo3D({ focus: false });
+      });
     }
 
     load();
