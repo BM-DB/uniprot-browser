@@ -95,15 +95,20 @@
         copyBtn.disabled = true;
       }
 
-      // Build Mol* hosted viewer URL in "minimal" mode
-      // Prefer mmCIF; if you KNOW some are legacy PDB/CIF, change 'mmcif' to 'cif' for those.
-      const encodedCif = encodeURIComponent(cifUrl);
-      const viewerUrl =
-        `https://molstar.org/viewer/?structure-url=${encodedCif}` +
-        `&structure-url-format=mmcif` +
-        `&hide-controls=1` +
-        `&representation=cartoon&color-theme=uniform&color-value=0x4682B4&bgcolor=white&outline=1&lighting=soft`;
+      // === Local minimal PDBe frame (Option B) ===
+      // Styling knobs:
+      const colorHex = '0x4682B4';    // steel blue; change to any hex (e.g., 0xA9A9A9)
+      const outline  = 1;             // 1 = on, 0 = off
+      const lighting = 'soft';         // 'soft' (preferred); other values are ignored if unsupported
 
+      // Build the iframe URL to the local viewer-frame.html
+      const viewerUrl =
+        `viewer-frame.html?url=${encodeURIComponent(cifUrl)}` +
+        `&format=mmcif` +                         // the frame will auto-fallback to 'cif' if needed
+        `&color=${encodeURIComponent(colorHex)}` +
+        `&outline=${outline}` +
+        `&lighting=${encodeURIComponent(lighting)}` +
+        `&v=${Date.now()}`;                       // cache-buster
 
       // Load into the iframe
       frame.src = viewerUrl;

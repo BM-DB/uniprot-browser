@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>PDBe Mol* Minimal Frame</title>
+
+  <!-- Pin a specific PDBe Mol* version for stability -->
+  <script src="https://unpkg.com/pdbe-molstar@3.1.0/build/pdbe-molstar-plugin.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/pdbe-molstar@3.1.0/build/pdbe-molstar.css" />
+
+  <style>
+    html, body { margin:0; height:100%; width:100%; background:#fff; }
+    #viewer { width:100%; height:100%; position:relative; }
+
+    /* Hard-hide all PDBe/Mol* UI chrome so only the canvas remains */
+    .msp-left-panel,
+    .msp-right-panel,
+    .msp-bottom-panel,
+    .msp-layout-controls,
+    .msp-viewport-controls,
+    .msp-plugin-ui,
+    .msp-help-toast,
+    .msp-controls,
+    .msp-controls-wrapper {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+    }
+
+    /* Ensure the viewport (canvas) fills the frame */
+    #viewer .msp-viewport,
+    #viewer canvas {
+      width: 100% !important;
+      height: 100% !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
+    }
+  </style>
+</head>
+<body>
+  <div id="viewer"></div>
+  <script>
+    // Read query params: ?url=...&format=mmcif|cif&color=0x4682B4
+    const params = new URL(location.href).searchParams;
+    const cifUrl   = params.get('url') || '';
+    const fmt      = params.get('format') || 'mmcif';
+    const colorHex = params.get('color') || '0x4682B4'; // default steel blue
+    const outline  = params.get('outline') === '0' ? false : true; // default on
+    const lighting = params.get('lighting') || 'soft'; // 'soft' as desired
+
+    // Instantiate the PDBe Mol* plugin
+    const viewer = new PDBeMolstarPlugin();
+
+    // 1) Initialize with UI=true for robust startup; CSS hides all chrome afterward.
+    viewer.render('viewer', {
+      ui: true,
+      bgColor: { r: 255, g: 255, b: 255 },
+      layoutIsExpanded: false,
+      viewportShowExpand: true
+    });
+
+    // 2) Load the structure
+    function load(format) {
+      viewer.render('viewer', {
+        ui: true,
+        bgColor: { r: 255, g: 255, b: 255 },
+        customData: { url: cifUrl, format }
+      });
+    }
+
+    (async () => {
+      if (!cifUrl) return;
+      try {
+        load(fmt);
+      } catch (e1) {
+        console.warn('Initial load failed, retrying as cif', e1);
+        try { load('cif'); } catch (e2) { console.error('cif also failed', e2); }
+      }
+
+      // 3) After PDBe injects content, repeatedly hide UI (defensive) and try styling
+      function hideUI() {
+        const sel = [
+          '.msp-left-panel','.msp-right-panel','.msp-bottom-panel',
+          '.msp-layout-controls','.msp-viewport-controls',
+          '.msp-plugin-ui','.msp-controls','.msp-controls-wrapper','.msp-help-toast'
+        ];
+        sel.forEach(s => {
+          document.querySelectorAll(s).forEach(el => {
+            el.style.display = 'none';
+            el.style.visibility = 'hidden';
+            el.style.pointerEvents = 'none';
+          });
+        });
+      }
+      hideUI();
+      setTimeout(hideUI, 50);
+      setTimeout(hideUI, 250);
+
+      // Mutation observer to re-hide if PDBe re-injects controls
+      const mo = new MutationObserver(() => hideUI());
+      mo.observe(document.getElementById('viewer'), { childList: true, subtree: true });
+
+      // 4) Try to apply styling tweaks using underlying Mol* API (best-effort)
+      function tryStylingTweaks() {
+        try {
+          // Access Mol* plugin instance that PDBe wraps
+          const plugin = viewer?.viewerInstance?.plugin || viewer?.plugin || null;
+          if (!plugin) return;
+
+          // ---- Outline + lighting (best-effort; ignore if unsupported) ----
+          const c3d = plugin.canvas3d;
+          if (c3d && c3d.setProps) {
+            // Soft lighting via ambient; enable outline
+            c3d.setProps({
+              renderer: { ambientIntensity: 0.6 },
+              postprocessing: {
+                outline: {
+                  enable: !!outline,
+                  scale: 1.0,
+                  threshold: 0.8
+                }
+              }
+            });
+          }
+
+          // ---- Uniform color on cartoon representation (best-effort) ----
+          // Convert hex like "0x4682B4" to RGB array [r,g,b] 0..1
+          const hex = colorHex.startsWith('0x') ? colorHex.slice(2) :
+                      colorHex.startsWith('#') ? colorHex.slice(1) : colorHex;
+          const bigint = parseInt(hex, 16);
+          const r = ((bigint >> 16) & 255) / 255;
+          const g = ((bigint >> 8) & 255) / 255;
+          const b = (bigint & 255) / 255;
+
+          // Apply a uniform color theme to all representations where possible
+          const reps = plugin.managers?.structure?.representation?.componentReprs || [];
+          reps.forEach(cr => {
+            // Try to set cartoon where applicable, and uniform color
+            try {
+              if (cr.setTheme) {
+                cr.setTheme({
+                  color: { name: 'uniform', params: { value: { r, g, b } } }
+                });
+              }
+            } catch {}
+          });
+
+        } catch (e) {
+          // If anything isn't supported in this PDBe build, silently ignore.
+          // The viewer still shows minimal canvas with white background.
+        }
+      }
+
+      // Try styling tweaks a few times as the scene stabilizes
+      setTimeout(tryStylingTweaks, 400);
+      setTimeout(tryStylingTweaks, 1200);
+      setTimeout(tryStylingTweaks, 2500);
+    })();
+  </script>
+</body>
+</html>
