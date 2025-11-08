@@ -4,174 +4,170 @@
   <meta charset="utf-8" />
   <title>Entry</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- PDBe Mol* (light theme) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-light.css">
-  <script src="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-plugin.js"></script>
 
-  <!-- PDB ProtVista (sequence viewer) -->
-  <!-- Using a known version that supports custom-data viewerdata -->
+  <!-- ProtVista dependencies (needed for the right-hand interactive sequence) -->
+  <link rel="stylesheet" href="https://ebi.emblstatic.net/web_guidelines/EBI-Icon-fonts/v1.2/fonts.css" type="text/css" media="all"/>
+  <script src="https://d3js.org/d3.v4.min.js" charset="utf-8"></script>
   <script src="https://www.ebi.ac.uk/pdbe/pdb-component-library/js/protvista-pdb-3.3.0.js"></script>
 
   <style>
-    :root { --gap: 16px; }
-    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    .page {
+    /* page layout: viewer left, sequence right */
+    .two-col {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: var(--gap);
-      padding: 16px;
+      gap: 16px;
+      align-items: start;
     }
-    @media (max-width: 900px) {
-      .page { grid-template-columns: 1fr; }
-    }
-    .panel {
-      background: #fff;
-      border: 1px solid #e5e5e5;
+    .viewer-card, .seq-card {
+      width: 100%;
+      border: 1px solid #ddd;
       border-radius: 8px;
       overflow: hidden;
+      background: #fff;
     }
-    header {
-      display:flex; align-items:center; gap:8px;
-      padding: 12px 16px; border-bottom:1px solid #eee; background:#fafafa;
+    #viewer-frame {
+      width: 100%;
+      height: 640px;
+      border: 0;
+      display: block;
+      background: #fff;
     }
-    header a { text-decoration: none; }
-    h1 { font-size: 18px; margin: 0; font-weight: 600; }
-    .viewer-wrap { height: 640px; }
-    #molstar { width:100%; height:100%; position:relative; }
-    .seq-wrap { height: 640px; display:flex; flex-direction:column; }
-    .seq-inner { padding: 0 12px 12px; overflow:auto; height:100%; }
-    .meta { display:flex; gap:12px; align-items:center; padding: 12px 16px; border-top:1px solid #eee; }
-    .btn { padding: 6px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; background:#fff; }
-    .error { color:#b00020; padding: 8px 16px; }
-    .muted { color:#666; font-size: 13px; }
+    /* Make the ProtVista panel fill its card nicely */
+    .seq-card protvista-pdb {
+      display: block;
+      height: 640px;
+      /* ProtVista handles its own internal scrolling/zooming */
+    }
+
+    .meta {
+      display: flex; gap: 12px; align-items: center;
+      margin: 8px 0 16px;
+    }
+    .meta a { text-decoration: none; }
+    .error { color:#b00020; margin-top:8px; }
+    .btn { padding: 6px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; }
   </style>
 </head>
 <body>
-  <header>
-    <a href="index.html">← Back</a>
-    <h1 id="title" aria-live="polite"></h1>
-    <span class="muted" id="uidNote"></span>
-  </header>
+  <a href="index.html">← Back</a>
+  <h1 id="title"></h1>
 
-  <div class="page">
-    <!-- Left: Mol* -->
-    <div class="panel">
-      <div class="viewer-wrap">
-        <div id="molstar" aria-label="3D structure viewer"></div>
-      </div>
-      <div class="meta">
-        <strong>Files:</strong>
-        <a id="cifLink" target="_blank" rel="noopener">CIF</a>
-        <a id="fastaLink" target="_blank" rel="noopener">FASTA</a>
-        <button id="copyBtn" class="btn" type="button">Copy FASTA</button>
-      </div>
-      <div id="err" class="error" role="alert" aria-live="assertive"></div>
+  <div class="two-col">
+    <!-- LEFT: Mol* viewer (unchanged minimal iframe) -->
+    <div class="viewer-card">
+      <iframe id="viewer-frame" src="about:blank" title="Mol* Viewer (minimal)"></iframe>
     </div>
 
-    <!-- Right: ProtVista sequence viewer -->
-    <div class="panel seq-wrap">
-      <div class="seq-inner">
-        <!-- Custom-data mode lets us inject our sequence and tracks -->
-        <protvista-pdb id="pv" custom-data="true" subscribe-events="true"></protvista-pdb>
-      </div>
+    <!-- RIGHT: Interactive sequence (ProtVista) -->
+    <div class="seq-card">
+      <!-- custom-data mode lets us supply our own sequence/features -->
+      <protvista-pdb id="seqView" custom-data="true"></protvista-pdb>
     </div>
   </div>
+
+  <div class="meta">
+    <strong>Files:</strong>
+    <a id="cifLink"   target="_blank" rel="noopener">CIF</a>
+    <a id="fastaLink" target="_blank" rel="noopener">FASTA</a>
+    <button id="copyBtn" class="btn" type="button">Copy FASTA</button>
+  </div>
+
+  <div id="err" class="error"></div>
 
   <script>
     function getParam(name){ return new URL(location.href).searchParams.get(name); }
 
+    // tiny helper: turn FASTA text into a single sequence string
+    function fastaToSequence(fastaText) {
+      return fastaText
+        .split(/\r?\n/)
+        .filter(line => !line.startsWith('>'))
+        .join('')
+        .replace(/\s+/g, '')
+        .trim();
+    }
+
     async function load(){
-      const uid       = getParam('uid');
-      const titleEl   = document.getElementById('title');
-      const uidNoteEl = document.getElementById('uidNote');
-      const errEl     = document.getElementById('err');
-      const cifLink   = document.getElementById('cifLink');
-      const fastaLink = document.getElementById('fastaLink');
-      const copyBtn   = document.getElementById('copyBtn');
-      const pvEl      = document.getElementById('pv');
-      const molDiv    = document.getElementById('molstar');
+      const uid      = getParam('uid');
+      const errEl    = document.getElementById('err');
+      const titleEl  = document.getElementById('title');
+      const cifLink  = document.getElementById('cifLink');
+      const fastaLink= document.getElementById('fastaLink');
+      const copyBtn  = document.getElementById('copyBtn');
+      const frame    = document.getElementById('viewer-frame');
+      const seqView  = document.getElementById('seqView');
 
       titleEl.textContent = uid || '(missing uid)';
-      uidNoteEl.textContent = uid ? ` · UniProt ID ${uid}` : '';
 
-      // Load entries.json (cache-busted)
-      let entry;
+      // Load catalog with a cache-buster
+      let catalog;
       try {
-        const catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r=>r.json());
-        entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
-        if (!entry) throw new Error('not-in-catalog');
-      } catch (e) {
-        errEl.textContent = 'Could not find this entry in entries.json.';
-        return;
+        catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r=>r.json());
+      } catch {
+        errEl.textContent = 'Could not load entries.json.'; return;
       }
 
+      const entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
+      if(!entry){ errEl.textContent = 'Entry not found in catalog.'; return; }
+
+      // Wire file links
       const cifUrl   = entry.files.structure_cif;
       const fastaUrl = entry.files.sequence_fasta;
       cifLink.href   = cifUrl;
       fastaLink.href = fastaUrl;
 
-      // Fetch FASTA and turn into a single sequence string
+      // Load FASTA and wire copy button
       let fastaText = '';
-      let sequence  = '';
       try {
-        fastaText = await fetch(fastaUrl).then(r => r.text());
-        sequence  = fastaText
-          .split(/\r?\n/)
-          .filter((ln, i) => !(i === 0 && ln.startsWith('>')))
-          .join('')
-          .replace(/\s+/g, '')
-          .toUpperCase();
-      } catch {
-        // ok to proceed without sequence; viewer still loads
-      }
-
-      // Copy FASTA button
-      if (fastaText) {
+        fastaText = await fetch(fastaUrl).then(r=>r.text());
         copyBtn.onclick = async () => {
-          try {
-            await navigator.clipboard.writeText(fastaText);
-            copyBtn.textContent = 'Copied!';
-            setTimeout(()=> (copyBtn.textContent = 'Copy FASTA'), 1200);
-          } catch {}
+          await navigator.clipboard.writeText(fastaText);
+          copyBtn.textContent = 'Copied!';
+          setTimeout(()=> (copyBtn.textContent = 'Copy FASTA'), 1200);
         };
-      } else {
+      } catch {
+        errEl.textContent = 'FASTA not available.';
         copyBtn.disabled = true;
       }
 
-      // ---- 3D: PDBe Mol* (minimal look, white bg, soft lighting) ----
-      const viewer = new PDBeMolstarPlugin();
-      const options = {
-        customData: { url: cifUrl, format: 'cif' },  // your CIF URL
-        hideControls: true,                           // minimal UI
-        leftPanel: false,
-        rightPanel: false,
-        sequencePanel: false,
-        bgColor: 'white',
-        lighting: 'matte',                            // soft lighting; other: 'flat'|'glossy'...
-        visualStyle: 'cartoon',
-        subscribeEvents: true                         // enable cross-component events
-      };
-      viewer.render(molDiv, options);
+      // LEFT: Mol* minimal viewer (unchanged)
+      const encodedCif = encodeURIComponent(cifUrl);
+      const viewerUrl =
+        `https://molstar.org/viewer/?structure-url=${encodedCif}` +
+        `&structure-url-format=mmcif&hide-controls=1`;
+      frame.src = viewerUrl;
 
-      // ---- 2D sequence: PDB ProtVista (custom data) ----
-      // Minimal track set—just the sequence + navigation (you can add more tracks later).
-      if (sequence && pvEl) {
-        const customData = {
+      // RIGHT: Build ProtVista custom data from the FASTA sequence
+      const seq = fastaToSequence(fastaText);
+      if (!seq) {
+        // No sequence -> show nothing but avoid errors
+        seqView.viewerdata = {
           displayNavigation: true,
-          displaySequence: true,
-          sequence,
-          length: sequence.length,
-          offset: 1,
-          tracks: [] // add domain/feature tracks later if you like
+          displaySequence: false,
+          sequence: '',
+          length: 0,
+          tracks: []
         };
-        // Supply data to the web component
-        pvEl.viewerdata = customData; // <- per PDBe example
+        return;
       }
 
-      // Optional: basic error listener for Mol*
-      viewer.events?.loadError?.subscribe?.(() => {
-        errEl.textContent = '3D viewer failed to load this structure.';
-      });
+      const customData = {
+        displayNavigation: true,   // top ruler with zoom/pan
+        displaySequence: true,     // actual sequence letters track
+        sequence: seq,             // protein sequence (no spaces/newlines)
+        length: seq.length,
+        offset: 1,                 // residues start at 1
+        // You can add your own feature tracks here later (domains, motifs, etc.)
+        tracks: []
+      };
+
+      // Assign the data to the web component (per PDBe example)
+      // ref: PDBe custom-data demo: viewerdata property
+      seqView.viewerdata = customData;
+
+      // Optional: wire basic hover/click events from ProtVista (for future use)
+      // document.addEventListener('protvista-click', e => console.log('pv-click', e.detail));
+      // document.addEventListener('protvista-mouseover', e => console.log('pv-over', e.detail));
     }
 
     load();
