@@ -100,9 +100,11 @@
       const encodedCif = encodeURIComponent(cifUrl);
       const viewerUrl =
         `https://molstar.org/viewer/?structure-url=${encodedCif}` +
-        `&structure-url-format=mmcif&hide-controls=1`;
+        `&structure-url-format=mmcif` +
+        `&hide-controls=1` +
+        `&representation=cartoon&color-theme=uniform&color-value=0x4682B4&bgcolor=white&outline=1&lighting=soft`;
 
-      
+
       // Load into the iframe
       frame.src = viewerUrl;
     }
