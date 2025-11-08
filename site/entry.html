@@ -34,7 +34,7 @@
   <h1 id="title"></h1>
 
   <div class="viewer-card">
-    <iframe id="viewer-frame" src="about:blank" title="Mol* Viewer"></iframe>
+    <iframe id="viewer-frame" src="about:blank" title="Mol* Viewer (minimal)"></iframe>
   </div>
 
   <div class="meta">
@@ -72,16 +72,18 @@
         errEl.textContent = 'Could not load entries.json.'; return;
       }
 
-      const entry = catalog.entries.find(e => e.uniprot_id === uid);
+      const entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
       if(!entry){ errEl.textContent = 'Entry not found in catalog.'; return; }
 
       // Wire file links
-      cifLink.href   = entry.files.structure_cif;
-      fastaLink.href = entry.files.sequence_fasta;
+      const cifUrl   = entry.files.structure_cif;
+      const fastaUrl = entry.files.sequence_fasta;
+      cifLink.href   = cifUrl;
+      fastaLink.href = fastaUrl;
 
-      // Load FASTA text
+      // Show FASTA text
       try {
-        const t = await fetch(entry.files.sequence_fasta).then(r=>r.text());
+        const t = await fetch(fastaUrl).then(r=>r.text());
         fastaEl.textContent = t;
         copyBtn.onclick = async () => {
           await navigator.clipboard.writeText(t);
@@ -93,9 +95,15 @@
         copyBtn.disabled = true;
       }
 
-      // Point the iframe at the Mol* core minimal viewer with the CIF URL
-      const encodedUrl = encodeURIComponent(entry.files.structure_cif);
-      frame.src = `viewer-core.html?url=${encodedUrl}&v=coremin`;
+      // Build Mol* hosted viewer URL in "minimal" mode
+      // Prefer mmCIF; if you KNOW some are legacy PDB/CIF, change 'mmcif' to 'cif' for those.
+      const encodedCif = encodeURIComponent(cifUrl);
+      const viewerUrl =
+        `https://molstar.org/viewer/?structure-url=${encodedCif}` +
+        `&structure-url-format=mmcif&hide-controls=1`;
+
+      // Load into the iframe
+      frame.src = viewerUrl;
     }
 
     load();
