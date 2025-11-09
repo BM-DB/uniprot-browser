@@ -3,132 +3,302 @@
 <head>
   <meta charset="utf-8" />
   <title>Entry</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-
   <link rel="stylesheet" href="styles.css" />
-
-  <!-- PDBe Mol* CSS + JS -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar.css" />
+  <!-- PDBe Mol* (minimal UI) -->
   <script src="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-plugin.js"></script>
-
-  <!-- ProtVista PDB local -->
-  <script src="./vendor/protvista-pdb/d3.v4.min.js"></script>
-  <script src="./vendor/protvista-pdb/protvista-pdb-3.3.0.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar.css"/>
 
   <style>
-    body { margin:16px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#fafafa; }
-    h1 { margin-top: 0; }
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    .card { background:#fff; border:1px solid #ddd; border-radius:8px; min-height:640px; display:flex; flex-direction:column; }
-    .card-header { padding:8px 12px; background:#f7f7f7; border-bottom:1px solid #ddd; font-weight:600; }
-    .card-body { position:relative; flex:1 1 auto; }
-    #molstar { position:absolute; inset:0; }
-    #seqPanel { position:absolute; inset:0; }
-    protvista-pdb { display:block; width:100%; height:100%; }
-    .meta { margin:12px 0; display:flex; gap:12px; align-items:center; }
-    .btn { padding:6px 10px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer; }
-    .error { color:#b00020; margin-top:8px; }
-    @media(max-width:900px){ .row { grid-template-columns:1fr; } }
+    :root { --panel-pad: 12px; }
+    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    a { text-decoration: none; }
+
+    .bar { padding: 10px var(--panel-pad); }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding: 0 var(--panel-pad) 16px;
+    }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 300px;
+    }
+    .card h3 {
+      margin: 0;
+      padding: 10px 12px;
+      border-bottom: 1px solid #eee;
+      background: #fafafa;
+      font-size: 15px;
+    }
+
+    /* Left: viewer */
+    #viewer-container { position: relative; height: 640px; }
+    #molstar-host { position: absolute; inset: 0; }
+
+    /* Right: sequence */
+    #seq-panel { display: flex; flex-direction: column; height: 640px; }
+    #seq-toolbar {
+      display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #eee; background: #fafafa;
+    }
+    #seq-box {
+      padding: 12px;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      line-height: 1.65;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+      flex: 1;
+      background: #fff;
+    }
+    .res {
+      display: inline-block;
+      padding: 1px 2px;
+      border-radius: 3px;
+      cursor: pointer;
+      transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
+      user-select: none;
+    }
+    .res:hover { background: #eaf2ff; }
+    .res.sel { background: #2563eb; color: #fff; }
+    .res.focus { outline: 1px solid #111; }
+    .pos {
+      color: #999; font-size: 11px; margin: 0 6px;
+    }
+
+    .meta { display:flex; gap:12px; align-items:center; margin: 6px var(--panel-pad) 16px; }
+    .btn { padding: 6px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; background:#fff; }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+    .error { color:#b00020; margin: 8px var(--panel-pad) 0; }
   </style>
 </head>
 <body>
-  <a href="index.html">← Back</a>
-  <h1 id="title"></h1>
+  <div class="bar"><a href="index.html">← Back</a></div>
+  <div class="bar"><h1 id="title" style="margin:0"></h1></div>
+
+  <div class="grid">
+    <!-- Left: Mol* -->
+    <div class="card">
+      <h3>Structure</h3>
+      <div id="viewer-container">
+        <div id="molstar-host"></div>
+      </div>
+    </div>
+
+    <!-- Right: sequence -->
+    <div class="card">
+      <h3>Sequence</h3>
+      <div id="seq-panel">
+        <div id="seq-toolbar">
+          <button id="clearSel" class="btn" type="button">Clear selection</button>
+          <button id="copyFasta" class="btn" type="button">Copy FASTA</button>
+          <span id="hoverPos" class="pos"></span>
+        </div>
+        <div id="seq-box" aria-label="Protein sequence"></div>
+      </div>
+    </div>
+  </div>
 
   <div class="meta">
     <strong>Files:</strong>
     <a id="cifLink" target="_blank" rel="noopener">CIF</a>
     <a id="fastaLink" target="_blank" rel="noopener">FASTA</a>
-    <button id="copyBtn" class="btn" type="button">Copy FASTA</button>
   </div>
 
   <div id="err" class="error"></div>
 
-  <div class="row">
-    <!-- Left: 3D viewer -->
-    <section class="card">
-      <div class="card-header">Structure</div>
-      <div class="card-body"><div id="molstar"></div></div>
-    </section>
-
-    <!-- Right: Sequence panel (ProtVista PDB) -->
-    <section class="card">
-      <div class="card-header">Sequence</div>
-      <div class="card-body"><div id="seqPanel"><protvista-pdb id="seq"></protvista-pdb></div></div>
-    </section>
-  </div>
-
   <script>
-    function getParam(name) { return new URL(location.href).searchParams.get(name); }
+  // --- helpers ---
+  const qs = sel => document.querySelector(sel);
+  const getParam = name => new URL(location.href).searchParams.get(name);
+  const chunk = (str, n=10) => str.match(new RegExp(`.{1,${n}}`, 'g')) || [];
 
-    async function load() {
-      const uid = getParam('uid');
-      const titleEl = document.getElementById('title');
-      const errEl = document.getElementById('err');
-      const cifLink = document.getElementById('cifLink');
-      const fastaLink = document.getElementById('fastaLink');
-      const copyBtn = document.getElementById('copyBtn');
+  // --- main ---
+  (async function run(){
+    const uid = getParam('uid');
+    const errEl = qs('#err');
+    const titleEl = qs('#title');
+    const cifLink = qs('#cifLink');
+    const fastaLink = qs('#fastaLink');
+    const seqBox = qs('#seq-box');
+    const copyBtn = qs('#copyFasta');
+    const clearBtn = qs('#clearSel');
+    const hoverPos = qs('#hoverPos');
 
-      titleEl.textContent = uid || '(missing uid)';
+    titleEl.textContent = uid || '(missing uid)';
 
-      let catalog;
-      try {
-        catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r=>r.json());
-      } catch(e) {
-        errEl.textContent = 'Could not load entries.json.';
-        console.error(e);
-        return;
-      }
+    // load catalog
+    let catalog;
+    try {
+      catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r => r.json());
+    } catch (e) {
+      errEl.textContent = 'Could not load entries.json';
+      return;
+    }
+    const entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
+    if (!entry) { errEl.textContent = 'Entry not found in catalog.'; return; }
 
-      const entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
-      if (!entry) {
-        errEl.textContent = 'Entry not found in catalog.';
-        return;
-      }
+    const cifUrl = entry.files.structure_cif;
+    const fastaUrl = entry.files.sequence_fasta;
+    cifLink.href = cifUrl; fastaLink.href = fastaUrl;
 
-      const cifUrl   = entry.files.structure_cif;
-      const fastaUrl = entry.files.sequence_fasta;
-      cifLink.href   = cifUrl;
-      fastaLink.href = fastaUrl;
+    // Fetch FASTA text (strip header to a single sequence)
+    let fastaText = '';
+    let seq = '';
+    try {
+      fastaText = await fetch(fastaUrl).then(r => r.text());
+      const lines = fastaText.split(/\r?\n/);
+      seq = lines.filter(l => !l.startsWith('>')).join('').trim();
+    } catch (e) {
+      errEl.textContent = 'Could not fetch FASTA.';
+      return;
+    }
 
-      // Load FASTA text
-      let fastaText = '';
-      try {
-        fastaText = await fetch(fastaUrl).then(r=>r.text());
-        copyBtn.onclick = async () => {
-          await navigator.clipboard.writeText(fastaText);
-          copyBtn.textContent = 'Copied!';
-          setTimeout(()=> (copyBtn.textContent = 'Copy FASTA'), 1200);
-        };
-      } catch(e) {
-        copyBtn.disabled = true;
-      }
+    // --- render Mol* (PDBe plugin, minimal UI) ---
+    const viewer = new PDBeMolstarPlugin();
+    viewer.render('molstar-host', {
+      customData: { url: cifUrl, format: 'cif' },
+      hideControls: true, // minimal UI
+      bgColor: { r: 255, g: 255, b: 255 },
+      // nice soft lighting + outline
+      lighting: 'soft',
+      outline: true,
+      // start with cartoon, uniform color
+      alphafoldView: false,
+      hideCanvasControls: true
+    });
 
-      // -------------------------------------------------------------------------
-      // 1) Initialize Mol* viewer
-      const viewer = new PDBeMolstarPlugin();
-      await viewer.render('molstar', {
-        customData: { url: cifUrl, format: 'cif' },
-        hideControls: true,
-        bgColor: { r:255, g:255, b:255 }
+    // a tiny wait ensures the structure is mounted before first selection
+    await new Promise(res => setTimeout(res, 350));
+
+    // --- render interactive sequence on the right ---
+    // We map positions 1..N to clickable spans. We’ll select by label_seq_id.
+    const frag = document.createDocumentFragment();
+    const blockSize = 10; // put a space every 10 residues
+    let selSet = new Set(); // currently selected positions
+
+    function spanFor(i, aa) {
+      const sp = document.createElement('span');
+      sp.className = 'res';
+      sp.dataset.pos = String(i); // 1-based
+      sp.textContent = aa;
+      sp.title = `Residue ${i}`;
+      sp.addEventListener('mouseenter', () => {
+        hoverPos.textContent = `hover: ${i}`;
+        // transient highlight of a single residue
+        highlightRange(i, i, true);
       });
+      sp.addEventListener('mouseleave', () => {
+        hoverPos.textContent = '';
+        // revert transient highlight, keep persistent selections
+        if (selSet.size) applyPersistentSelection();
+        else clearSelectionInViewer();
+      });
+      sp.addEventListener('click', (ev) => {
+        if (ev.shiftKey && selSet.size) {
+          // shift-click: extend from nearest selected residue
+          const last = [...selSet].sort((a,b)=>a-b).pop();
+          const from = Math.min(last, i), to = Math.max(last, i);
+          for (let k = from; k <= to; k++) selSet.add(k);
+        } else if (ev.metaKey || ev.ctrlKey) {
+          // toggle
+          if (selSet.has(i)) selSet.delete(i); else selSet.add(i);
+        } else {
+          // single selection
+          selSet = new Set([i]);
+        }
+        paintSequenceSelection();
+        applyPersistentSelection();
+      });
+      return sp;
+    }
 
-      // -------------------------------------------------------------------------
-      // 2) Initialize ProtVista PDB (sequence panel)
-      const pv = document.getElementById('seq');
-      // Use the UniProt accession directly (ProtVista knows how to fetch annotations)
-      pv.accession = uid;
+    // lay out sequence text with blocks of 10, groups of 50 per line
+    let i = 0;
+    const line = document.createElement('div');
+    line.style.marginBottom = '6px';
 
-      // 3) Set up interactive linking: sequence selection → structure highlight
-      pv.addEventListener('change', e => {
-        const d = e.detail || {};
-        const start = d.start|0, end = d.end|0;
-        if (!start || !end) return;
-        viewer.visual.select({ data: { residues: [{ start, end }] } });
+    for (const aa of seq) {
+      i++;
+      line.appendChild(spanFor(i, aa));
+      if (i % blockSize === 0) line.appendChild(document.createTextNode(' '));
+      if (i % 50 === 0) {
+        frag.appendChild(line.cloneNode(true));
+        line.textContent = '';
+      }
+    }
+    if (line.childNodes.length) frag.appendChild(line);
+    seqBox.innerHTML = '';
+    seqBox.appendChild(frag);
+
+    // buttons
+    copyBtn.onclick = async () => {
+      await navigator.clipboard.writeText(fastaText);
+      copyBtn.textContent = 'Copied!';
+      setTimeout(()=> copyBtn.textContent = 'Copy FASTA', 1200);
+    };
+    clearBtn.onclick = () => {
+      selSet.clear();
+      paintSequenceSelection();
+      clearSelectionInViewer();
+    };
+
+    function paintSequenceSelection() {
+      seqBox.querySelectorAll('.res').forEach(el => {
+        const pos = +el.dataset.pos;
+        el.classList.toggle('sel', selSet.has(pos));
       });
     }
 
-    load();
+    // --- viewer selection helpers (via PDBe Mol* “select” API) ---
+    // We select by label_seq_id ranges; chain is unspecified so it applies to any chain
+    function selectRanges(ranges, color = {r:37,g:99,b:235}) {
+      // PDBe plugin selection schema (flexible):
+      // data: array of { start_residue_number, end_residue_number, label_seq_id: true }
+      // When chain is unknown, omit asym_id/entity_id => it will match by label_seq_id across polymers.
+      const data = ranges.map(([a,b]) => ({
+        start_residue_number: a,
+        end_residue_number: b,
+        // hint to treat numbers as label_seq_id; some builds auto-detect, but this helps
+        label_seq_id: true
+      }));
+      viewer.visual.select({
+        data,
+        color, // selection color
+        focus: true, // zoom to selection if single/short
+        nonSelectedColor: { r: 220, g: 220, b: 220 }
+      });
+    }
+
+    function clearSelectionInViewer() {
+      viewer.visual.clearSelection();
+    }
+
+    function highlightRange(a, b, transient=false) {
+      // transient highlight uses same call; we simply don’t change persistent selSet
+      selectRanges([[a,b]], { r: 0, g: 0, b: 0 });
+    }
+
+    function applyPersistentSelection() {
+      if (!selSet.size) { clearSelectionInViewer(); return; }
+      // coalesce adjacent residues to ranges
+      const arr = [...selSet].sort((a,b)=>a-b);
+      const ranges = [];
+      let s = arr[0], prev = arr[0];
+      for (let k = 1; k < arr.length; k++) {
+        if (arr[k] === prev + 1) { prev = arr[k]; continue; }
+        ranges.push([s, prev]); s = prev = arr[k];
+      }
+      ranges.push([s, prev]);
+      selectRanges(ranges);
+    }
+  })();
   </script>
 </body>
 </html>
