@@ -370,18 +370,13 @@
       }
     }
 
-    // --- NEW: try to get a protein name (catalog first, UniProt fallback)
-    async function fetchUniProtName(uid) {
+    // --- UniProt (ONLY) protein name: recommended name
+    async function fetchUniProtRecommendedName(uid) {
       try {
         const res = await fetch(`https://rest.uniprot.org/uniprotkb/${encodeURIComponent(uid)}.json`, { cache: 'no-store' });
         if (!res.ok) return null;
         const data = await res.json();
-        const pd = data.proteinDescription || {};
-        // Prefer recommended name, then submission/alternative
-        const rec = pd.recommendedName?.fullName?.value;
-        const sub = pd.submissionNames?.[0]?.fullName?.value;
-        const alt = pd.alternativeNames?.[0]?.fullName?.value;
-        return rec || sub || alt || null;
+        return data?.proteinDescription?.recommendedName?.fullName?.value || null;
       } catch {
         return null;
       }
@@ -389,20 +384,26 @@
 
     async function load(){
       const uid = getParam('uid');
-      const titleIdEl  = document.getElementById('title-id');
-      const titleNameEl= document.getElementById('title-name');
-      const viewerErr  = document.getElementById('viewer-error');
-      const seqErr     = document.getElementById('seq-error');
-      const seqBody    = document.getElementById('seq-body');
+      const titleIdEl   = document.getElementById('title-id');
+      const titleNameEl = document.getElementById('title-name');
+      const viewerErr   = document.getElementById('viewer-error');
+      const seqErr      = document.getElementById('seq-error');
+      const seqBody     = document.getElementById('seq-body');
 
-      const copyBtn  = document.getElementById('copyBtn');
-      const dlCifBtn = document.getElementById('dlCifBtn');
-      const dlFastaBtn = document.getElementById('dlFastaBtn');
-      const dropdown = document.getElementById('downloadDropdown');
+      const copyBtn     = document.getElementById('copyBtn');
+      const dlCifBtn    = document.getElementById('dlCifBtn');
+      const dlFastaBtn  = document.getElementById('dlFastaBtn');
+      const dropdown    = document.getElementById('downloadDropdown');
       const downloadBtn = document.getElementById('downloadBtn');
 
       titleIdEl.textContent = uid || '(missing uid)';
-      titleNameEl.textContent = ''; // will fill shortly
+      titleNameEl.textContent = ''; // fill from UniProt only
+
+      // Fetch protein name from UniProt ONLY
+      if (uid) {
+        const recName = await fetchUniProtRecommendedName(uid);
+        if (recName) titleNameEl.textContent = `— ${recName}`;
+      }
 
       // Dropdown wiring
       function closeDropdown(){ dropdown.classList.remove('open'); }
@@ -425,17 +426,6 @@
         viewerErr.style.display = seqErr.style.display = 'block';
         viewerErr.textContent = seqErr.textContent = 'Entry not found in catalog.';
         return;
-      }
-
-      // --- Fill protein name in header (catalog first, UniProt fallback)
-      {
-        const fromCatalog = entry.protein_name || entry.description || '';
-        if (fromCatalog) {
-          titleNameEl.textContent = `— ${fromCatalog}`;
-        } else if (uid) {
-          const name = await fetchUniProtName(uid);
-          if (name) titleNameEl.textContent = `— ${name}`;
-        }
       }
 
       const cifUrl   = entry.files.structure_cif;
@@ -474,7 +464,7 @@
       })();
       const fastaName = (uid || 'sequence') + '.fasta';
 
-      dlCifBtn.onclick = async () => { closeDropdown(); await downloadFile(cifUrl, cifName); };
+      dlCifBtn.onclick   = async () => { closeDropdown(); await downloadFile(cifUrl,   cifName);   };
       dlFastaBtn.onclick = async () => { closeDropdown(); await downloadFile(fastaUrl, fastaName); };
 
       // Init PDBe Mol*
@@ -550,4 +540,3 @@
   </script>
 </body>
 </html>
-
