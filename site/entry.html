@@ -4,126 +4,75 @@
   <meta charset="utf-8" />
   <title>Entry</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- PDBe Mol* (pinned) -->
   <script src="https://unpkg.com/pdbe-molstar@3.7.1/build/pdbe-molstar-plugin.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/pdbe-molstar@3.7.1/build/pdbe-molstar-light.css" />
-
   <style>
-    :root {
-      --gap: 12px;
-      --card-border: #ddd;
-      --sitebar-h: 70px;  /* global header height */
-      --topbar-h: 54px;   /* entry header height */
-    }
+    :root { --gap: 12px; --card-border: #ddd; --sitebar-h: 70px; }
     html, body { height: 100%; margin: 0; background: #fff; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#222; }
 
-    /* Top site header (matches index) */
     .sitebar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 24px;
-      border-bottom: 1px solid var(--card-border);
-      background: #fff;
-      height: var(--sitebar-h);
-      box-sizing: border-box;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 24px; border-bottom: 1px solid var(--card-border);
+      background: #fff; height: var(--sitebar-h); box-sizing: border-box;
     }
-    .site-title {
-      font-size: 22px;
-      font-weight: 600;
-      margin: 0;
-    }
+    .site-title { font-size: 22px; font-weight: 600; margin: 0; }
 
-    /* Entry-specific header (back + id + name) */
     .topbar {
       display: flex; align-items: center; gap: 12px; padding: 12px 16px;
-      border-bottom: 1px solid var(--card-border);
-      background: #fff;
-      height: var(--topbar-h);            /* fixed height to match layout calc */
-      box-sizing: border-box;
+      border-bottom: 1px solid var(--card-border); background: #fff;
     }
     .topbar a { text-decoration: none; }
     .title { font-size: 20px; font-weight: 600; margin: 0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .subtitle { font-weight: 400; color:#555; font-size: 16px; }
 
-    /* Main split layout (subtract BOTH headers) */
     .main {
-      height: calc(100vh - var(--sitebar-h) - var(--topbar-h));
-      display: flex; gap: var(--gap);
-      padding: var(--gap); box-sizing: border-box;
+      height: calc(100vh - var(--sitebar-h) - 54px);
+      display: flex; gap: var(--gap); padding: var(--gap); box-sizing: border-box;
     }
     .col {
-      flex: 1 1 50%; min-width: 0;
-      display: flex; flex-direction: column;
-      border: 1px solid var(--card-border); border-radius: 8px;
-      overflow: hidden; background: #fff;
+      flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column;
+      border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; background: #fff;
     }
 
-    /* Left viewer */
     #viewer-wrap { position: relative; flex: 1 1 auto; }
     #viewer { position: absolute; inset: 0; }
-    #viewer .msp-viewport, #viewer canvas {
-      width: 100% !important; height: 100% !important;
-      max-width: 100% !important; max-height: 100% !important;
-    }
-    .msp-left-panel,.msp-right-panel,.msp-bottom-panel,
-    .msp-layout-controls,.msp-viewport-controls,
-    .msp-plugin-ui,.msp-controls,.msp-controls-wrapper,.msp-help-toast {
-      display: none !important; visibility: hidden !important; pointer-events: none !important;
-    }
+    #viewer .msp-viewport, #viewer canvas { width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100% !important; }
+    .msp-left-panel,.msp-right-panel,.msp-bottom-panel,.msp-layout-controls,.msp-viewport-controls,.msp-plugin-ui,.msp-controls,.msp-controls-wrapper,.msp-help-toast { display: none !important; visibility: hidden !important; pointer-events: none !important; }
 
-    /* Right header with dropdown */
-    .seq-header {
-      display: flex; align-items: center; gap: 12px;
-      padding: 10px 12px; border-bottom: 1px solid var(--card-border);
-      background: #fafafa; flex-wrap: wrap;
-    }
+    .seq-header { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--card-border); background: #fafafa; flex-wrap: wrap; }
     .btn { padding: 6px 10px; border: 1px solid var(--card-border); border-radius: 6px; cursor: pointer; background: #fff; }
 
     .dropdown { position: relative; }
     .dropdown-menu {
-      position: absolute; top: calc(100% + 6px); left: 0;
-      min-width: 180px; padding: 6px;
-      border: 1px solid var(--card-border); border-radius: 8px; background: #fff;
-      box-shadow: 0 8px 24px rgba(0,0,0,.08);
+      position: absolute; top: calc(100% + 6px); left: 0; min-width: 180px; padding: 6px;
+      border: 1px solid var(--card-border); border-radius: 8px; background: #fff; box-shadow: 0 8px 24px rgba(0,0,0,.08);
       display: none; z-index: 5;
     }
     .dropdown.open .dropdown-menu { display: block; }
-    .menu-item {
-      display: block; width: 100%; text-align: left;
-      border: 0; background: none; padding: 8px 10px; border-radius: 6px; cursor: pointer;
-      font: 14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-    }
+    .menu-item { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 8px 10px; border-radius: 6px; cursor: pointer; font: 14px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     .menu-item:hover { background: #f2f6ff; }
 
     .seq-body { flex: 1 1 auto; overflow: auto; padding: 12px; }
     .error { color: #b00020; padding: 8px 12px; border-top: 1px solid var(--card-border); background: #fff7f7; }
 
-    /* Interactive sequence strip */
     .seq-strip { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select: none; }
     .seq-chain { margin-bottom: 10px; }
     .seq-chain h4 { margin: 8px 0 6px; font: 600 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     .seq-row { display: flex; flex-wrap: wrap; align-items: center; }
-    .seq-res {
-      display: inline-block; padding: 2px 3px; margin: 0 1px 1px 0;
-      border-radius: 3px; cursor: pointer;
-    }
+    .seq-res { display: inline-block; padding: 2px 3px; margin: 0 1px 1px 0; border-radius: 3px; cursor: pointer; }
     .seq-res:hover { background:#eef6ff; }
     .seq-res.active { background:#cfe8ff; outline: 1px solid #8bbcff; }
     .seq-res.sel { background:#bad7ff; outline: 1px solid #7fb0ff; }
     .seq-res.drag { background:#dfeeff; outline: 1px dashed #9ac3ff; }
-
     .muted { color:#666; font-size:12px; margin: 6px 0 0; }
   </style>
 </head>
 <body>
-  <!-- Global site header (same as index) -->
   <div class="sitebar">
     <h1 class="site-title">Computational Structure Database</h1>
   </div>
 
-  <!-- Entry header -->
   <div class="topbar">
     <a href="index.html">← Back</a>
     <h1 class="title">
@@ -133,15 +82,11 @@
   </div>
 
   <div class="main">
-    <!-- Left: Mol* -->
     <div class="col">
-      <div id="viewer-wrap">
-        <div id="viewer"></div>
-      </div>
+      <div id="viewer-wrap"><div id="viewer"></div></div>
       <div id="viewer-error" class="error" style="display:none;"></div>
     </div>
 
-    <!-- Right: sequence + tools -->
     <div class="col">
       <div class="seq-header">
         <div class="dropdown" id="downloadDropdown">
@@ -153,7 +98,6 @@
         </div>
         <button id="copyBtn" class="btn" type="button">Copy Sequence</button>
       </div>
-
       <div class="seq-body" id="seq-body"></div>
       <div id="seq-error" class="error" style="display:none;"></div>
     </div>
@@ -162,7 +106,36 @@
   <script>
     function getParam(name){ return new URL(location.href).searchParams.get(name); }
 
-    // --- PDBe visual helpers
+    // ==== Configure where the names CSV lives ====
+    const PROTEIN_NAMES_URL = 'https://raw.githubusercontent.com/BM-DB/uniprot-data/refs/heads/main/Protein-Metadata/protein_names.csv';
+
+    async function loadNameMap() {
+      const map = new Map();
+      try {
+        const res = await fetch(PROTEIN_NAMES_URL + '?v=' + Date.now());
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const text = await res.text();
+        const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+        if (!lines.length) return map;
+
+        const header = lines[0].split(',').map(s => s.trim());
+        const uidIdx = header.findIndex(h => /uniprot\s*id/i.test(h));
+        const nameIdx = header.findIndex(h => /protein\s*name/i.test(h));
+        if (uidIdx === -1 || nameIdx === -1) return map;
+
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(',');
+          if (parts.length <= Math.max(uidIdx, nameIdx)) continue;
+          const uid = (parts[uidIdx] || '').trim();
+          const name = (parts[nameIdx] || '').trim();
+          if (uid) map.set(uid, name || '');
+        }
+      } catch (e) {
+        console.warn('Could not load protein_names.csv:', e);
+      }
+      return map;
+    }
+
     function pdbeHighlight(viewer, asym, auth) {
       try { viewer.visual.highlight({ data: [{ struct_asym_id: asym, start_residue_number: auth, end_residue_number: auth }] }); } catch {}
     }
@@ -172,16 +145,10 @@
     }
     function pdbeClearSelection(viewer) { try { viewer.visual.clearSelection?.(); } catch {} }
 
-    // ---- Drag-select controller
     function enableDragSelect(container, chainsMeta, viewer) {
-      const selected = new Map(); // asym -> array of [start,end]
-
+      const selected = new Map();
       function normalizeRange(a,b){ return [Math.min(a,b), Math.max(a,b)]; }
-      function mergeRanges(arr){
-        arr.sort((x,y)=>x[0]-y[0]);
-        const out=[]; for(const r of arr){ if(!out.length||r[0]>out[out.length-1][1]+1) out.push(r); else out[out.length-1][1]=Math.max(out[out.length-1][1],r[1]); }
-        return out;
-      }
+      function mergeRanges(arr){ arr.sort((x,y)=>x[0]-y[0]); const out=[]; for(const r of arr){ if(!out.length||r[0]>out[out.length-1][1]+1) out.push(r); else out[out.length-1][1]=Math.max(out[out.length-1][1],r[1]); } return out; }
       function addRangeIdx(asym, startIdx, endIdx){
         const meta = chainsMeta.get(asym); if(!meta) return;
         const [a,b]=normalizeRange(startIdx,endIdx);
@@ -191,8 +158,7 @@
       function toggleSingleIdx(asym, idx){
         const meta = chainsMeta.get(asym); if(!meta) return;
         const auth = meta.items[idx].auth;
-        let arr = selected.get(asym)||[];
-        let changed=false;
+        let arr = selected.get(asym)||[]; let changed=false;
         for (let i=0;i<arr.length;i++){
           const [s,e]=arr[i];
           if(auth>=s && auth<=e){
@@ -225,16 +191,13 @@
 
       chainsMeta.forEach((meta, asym) => {
         let dragging=false, anchorIdx=-1, lastIdx=-1;
-
         function clearDragPaint(){ meta.items.forEach(x => x.el.classList.remove('drag')); }
         function paintDrag(a,b){ clearDragPaint(); const [s,e]=normalizeRange(a,b); for(let i=s;i<=e;i++) meta.items[i].el.classList.add('drag'); }
 
         meta.items.forEach((x, idx) => {
           const el = x.el;
-
           el.addEventListener('mouseenter', ()=> pdbeHighlight(viewer, x.asym, x.auth));
           el.addEventListener('mouseleave', ()=> pdbeClearHighlight(viewer));
-
           el.addEventListener('mousedown', (ev) => { ev.preventDefault(); dragging=true; anchorIdx=idx; lastIdx=idx; meta.lastAnchorIdx=idx; paintDrag(anchorIdx, idx); });
           el.addEventListener('mousemove', () => { if(dragging && lastIdx!==idx){ lastIdx=idx; paintDrag(anchorIdx,lastIdx); } });
           el.addEventListener('mouseup', (ev) => {
@@ -251,7 +214,6 @@
             }
             paintSelected();
           });
-
           el.addEventListener('click', (ev) => {
             if (dragging) return;
             if (ev.metaKey || ev.ctrlKey) {
@@ -283,19 +245,13 @@
       };
     }
 
-    // FASTA strip (immediate fallback)
     function buildStripFromFasta(seqText, viewer) {
       const seq = seqText.split(/\r?\n/).filter(l => !l.startsWith('>')).join('\n').replace(/\s+/g,'').trim();
-
-      const container = document.createElement('div');
-      container.className = 'seq-strip';
-
+      const container = document.createElement('div'); container.className = 'seq-strip';
       const block = document.createElement('div'); block.className = 'seq-chain';
       const header = document.createElement('h4'); header.textContent = 'Chain A Sequence';
       const row = document.createElement('div'); row.className = 'seq-row';
-
       block.appendChild(header); block.appendChild(row);
-
       const chainsMeta = new Map(); const items = [];
       for (let i = 0; i < seq.length; i++) {
         const auth = i + 1; const asym = 'A';
@@ -306,22 +262,17 @@
         row.appendChild(sp); items.push({ auth, asym, el: sp });
       }
       chainsMeta.set('A', { items, elRow: row, lastAnchorIdx: null });
-
       container.appendChild(block);
-
       const note = document.createElement('div'); note.className = 'muted';
       note.textContent = 'Interactive sequence: hover, click, and drag to select residues.';
       container.appendChild(note);
-
       enableDragSelect(container, chainsMeta, viewer);
       return container;
     }
 
-    // Model-based strip
     function buildStripFromModel(model, viewer) {
       const { residues, chains } = model.atomicHierarchy || {};
       if (!residues || !chains) return null;
-
       const label_comp_id = residues.label_comp_id;
       const auth_seq_id   = residues.auth_seq_id;
       const chainIndex    = residues.chainIndex;
@@ -333,7 +284,7 @@
         return m[aa3?.toUpperCase()] || 'X';
       };
 
-      const perChain = new Map(); // asym -> list
+      const perChain = new Map();
       const nResidues = residues._rowCount | 0;
       for (let rI = 0; rI < nResidues; rI++) {
         const cIdx  = chainIndex[rI];
@@ -344,9 +295,7 @@
         perChain.get(asym).push({ one: to1(comp3), three: comp3, auth, asym });
       }
 
-      const container = document.createElement('div');
-      container.className = 'seq-strip';
-
+      const container = document.createElement('div'); container.className = 'seq-strip';
       const chainsMeta = new Map();
       perChain.forEach((list, asym) => {
         const block = document.createElement('div'); block.className = 'seq-chain';
@@ -388,7 +337,6 @@
       return null;
     }
 
-    // Save helper (forces download via Blob)
     async function downloadFile(url, filenameFallback) {
       try {
         const res = await fetch(url, { cache: 'no-store' });
@@ -403,43 +351,6 @@
         a.remove();
       } catch (e) {
         alert('Download failed. Please try again.');
-      }
-    }
-
-    // --- UniProt (ONLY) protein name:
-    // Prefer recommendedName; otherwise fall back to the first available alternative/submission/short name.
-    async function fetchUniProtBestName(uid) {
-      try {
-        const res = await fetch(`https://rest.uniprot.org/uniprotkb/${encodeURIComponent(uid)}.json`, { cache: 'no-store' });
-        if (!res.ok) return null;
-        const data = await res.json();
-        const pd = data?.proteinDescription;
-
-        const rec = pd?.recommendedName?.fullName?.value;
-        if (rec) return rec;
-
-        const altArr = pd?.alternativeNames;
-        if (Array.isArray(altArr) && altArr.length) {
-          const altFull = altArr[0]?.fullName?.value;
-          if (altFull) return altFull;
-          const altShort = altArr[0]?.shortName?.[0]?.value;
-          if (altShort) return altShort;
-        }
-
-        const subArr = pd?.submissionNames;
-        if (Array.isArray(subArr) && subArr.length) {
-          const subFull = subArr[0]?.fullName?.value;
-          if (subFull) return subFull;
-          const subShort = subArr[0]?.shortName?.[0]?.value;
-          if (subShort) return subShort;
-        }
-
-        const recShort = pd?.recommendedName?.shortName?.[0]?.value;
-        if (recShort) return recShort;
-
-        return null;
-      } catch {
-        return null;
       }
     }
 
@@ -458,21 +369,20 @@
       const downloadBtn = document.getElementById('downloadBtn');
 
       titleIdEl.textContent = uid || '(missing uid)';
-      titleNameEl.textContent = ''; // fill from UniProt only
+      titleNameEl.textContent = '';
 
-      // Fetch best-available protein name from UniProt ONLY
+      // Load name map from uniprot-data repo
+      const NAME_MAP = await loadNameMap();
       if (uid) {
-        const bestName = await fetchUniProtBestName(uid);
-        if (bestName) titleNameEl.textContent = `— ${bestName}`;
+        const nm = NAME_MAP.get(uid);
+        if (nm) titleNameEl.textContent = `— ${nm}`;
       }
 
-      // Dropdown wiring
       function closeDropdown(){ dropdown.classList.remove('open'); }
       function toggleDropdown(){ dropdown.classList.toggle('open'); }
       downloadBtn.addEventListener('click', (e)=>{ e.stopPropagation(); toggleDropdown(); });
       document.addEventListener('click', closeDropdown);
 
-      // Load catalog
       let catalog;
       try {
         catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r=>r.json());
@@ -492,24 +402,15 @@
       const cifUrl   = entry.files.structure_cif;
       const fastaUrl = entry.files.sequence_fasta;
 
-      // Pull FASTA (for fallback + copy)
       let fastaText = '';
-      try {
-        fastaText = await fetch(fastaUrl, { cache: 'no-store' }).then(r=>r.text());
-      } catch {
-        seqErr.style.display = 'block';
-        seqErr.textContent = 'FASTA not available.';
-      }
+      try { fastaText = await fetch(fastaUrl, { cache: 'no-store' }).then(r=>r.text()); }
+      catch { seqErr.style.display = 'block'; seqErr.textContent = 'FASTA not available.'; }
 
-      // Copy Sequence (no header)
       copyBtn.onclick = async () => {
         const seqOnly = (fastaText || '')
-          .split(/\r?\n/)
-          .filter(l => !l.startsWith('>'))
-          .join('\n')
-          .replace(/\s+/g, '')
-          .trim();
-        if (!seqOnly) { return; }
+          .split(/\r?\n/).filter(l => !l.startsWith('>')).join('\n')
+          .replace(/\s+/g, '').trim();
+        if (!seqOnly) return;
         try {
           await navigator.clipboard.writeText(seqOnly);
           const prev = copyBtn.textContent; copyBtn.textContent = 'Copied!';
@@ -517,7 +418,6 @@
         } catch {}
       };
 
-      // Download handlers (force download via Blob)
       const cifName = (() => {
         const urlLower = cifUrl.toLowerCase();
         const ext = urlLower.endsWith('.cif') && !urlLower.endsWith('.mmcif') ? '.cif' : '.mmcif';
@@ -528,29 +428,19 @@
       dlCifBtn.onclick   = async () => { closeDropdown(); await downloadFile(cifUrl,   cifName);   };
       dlFastaBtn.onclick = async () => { closeDropdown(); await downloadFile(fastaUrl, fastaName); };
 
-      // Init PDBe Mol*
       const fmt = (cifUrl.toLowerCase().endsWith('.cif') && !cifUrl.toLowerCase().endsWith('.mmcif')) ? 'cif' : 'mmcif';
       let pdbe;
       try { pdbe = new PDBeMolstarPlugin(); }
-      catch {
-        viewerErr.style.display = 'block';
-        viewerErr.textContent = 'Failed to create PDBe Mol* plugin.';
-        return;
-      }
+      catch { viewerErr.style.display = 'block'; viewerErr.textContent = 'Failed to create PDBe Mol* plugin.'; return; }
 
       try {
-        pdbe.render('viewer', {
-          customData: { url: cifUrl, format: fmt },
-          hideControls: true, expanded: false,
-          bgColor: { r:255, g:255, b:255 }
-        });
+        pdbe.render('viewer', { customData: { url: cifUrl, format: fmt }, hideControls: true, expanded: false, bgColor: { r:255, g:255, b:255 } });
       } catch {
         viewerErr.style.display = 'block';
         viewerErr.textContent = 'Mol* render error.';
         return;
       }
 
-      // Hide chrome defensively
       const root = document.getElementById('viewer');
       const hideChrome = () => {
         [
@@ -562,7 +452,6 @@
       hideChrome(); setTimeout(hideChrome, 100); setTimeout(hideChrome, 500);
       new MutationObserver(hideChrome).observe(root, { childList:true, subtree:true });
 
-      // Soft lighting + outline
       function styleScene() {
         try {
           const plugin = pdbe?.viewerInstance?.plugin;
@@ -578,7 +467,6 @@
       setTimeout(styleScene, 400);
       setTimeout(styleScene, 1200);
 
-      // 1) FASTA interactive fallback immediately (if we have it)
       if (fastaText) {
         seqBody.innerHTML = '';
         seqBody.appendChild(buildStripFromFasta(fastaText, pdbe));
@@ -589,7 +477,6 @@
         seqBody.innerHTML = ''; seqBody.appendChild(p);
       }
 
-      // 2) Upgrade to model-based interactive strip when ready
       const model = await waitForModel(pdbe, 12000);
       if (model) {
         const strip = buildStripFromModel(model, pdbe);

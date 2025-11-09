@@ -8,9 +8,9 @@
     :root {
       --gap: 12px;
       --card-border: #ddd;
-      --sitebar-h: 70px;
       --bg: #f8f9fb;
       --card-bg: #fff;
+      --sitebar-h: 70px;
     }
     html, body {
       height: 100%;
@@ -19,8 +19,7 @@
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
       color: #222;
     }
-
-    .topbar {
+    .sitebar {
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -30,118 +29,47 @@
       height: var(--sitebar-h);
       box-sizing: border-box;
     }
-
-
-    .title {
-      font-size: 22px;
-      font-weight: 600;
-      margin: 0;
-    }
-
+    .site-title { font-size: 22px; font-weight: 600; margin: 0; }
     .main {
-      padding: 24px;
-      box-sizing: border-box;
-      height: calc(100vh - 70px);
-      overflow-y: auto;
+      padding: 24px; box-sizing: border-box;
+      height: calc(100vh - var(--sitebar-h)); overflow-y: auto;
     }
-
     #search {
-      width: 100%;
-      max-width: 420px;
-      padding: 10px 12px;
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      font-size: 15px;
-      margin-bottom: 24px;
-      background: #fff;
+      width: 100%; max-width: 420px; padding: 10px 12px;
+      border: 1px solid var(--card-border); border-radius: 8px;
+      font-size: 15px; margin-bottom: 24px; background: #fff;
       box-shadow: 0 1px 2px rgba(0,0,0,0.04);
     }
-
-    #results {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
+    #results { display: flex; flex-direction: column; gap: 12px; }
     .entry {
-      border: 1px solid var(--card-border);
-      border-radius: 8px;
-      background: var(--card-bg);
-      padding: 14px 18px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+      border: 1px solid var(--card-border); border-radius: 8px; background: var(--card-bg);
+      padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;
       transition: background 0.2s;
     }
-    .entry:hover {
-      background: #f5f8ff;
-    }
-
-    .entry-info {
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      min-width: 0;
-    }
-
+    .entry:hover { background: #f5f8ff; }
+    .entry-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .entry-title {
-      font-weight: 600;
-      font-size: 15px;
-      color: #111;
-      word-break: break-word;
-      display: flex;
-      align-items: baseline;
-      gap: 8px;
-      flex-wrap: wrap;
+      font-weight: 600; font-size: 15px; color: #111; word-break: break-word;
+      display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
     }
-    .entry-subtitle {
-      font-weight: 400;
-      color: #555;
-      font-size: 13px;
-    }
-
-    .entry-desc {
-      color: #555;
-      font-size: 13px;
-      word-break: break-word;
-    }
-
+    .entry-subtitle { font-weight: 400; color: #555; font-size: 13px; }
+    .entry-desc { color: #555; font-size: 13px; word-break: break-word; }
     .btn {
-      padding: 7px 12px;
-      border: 1px solid var(--card-border);
-      border-radius: 6px;
-      cursor: pointer;
-      background: #fff;
-      font-size: 14px;
+      padding: 7px 12px; border: 1px solid var(--card-border); border-radius: 6px;
+      cursor: pointer; background: #fff; font-size: 14px; white-space: nowrap;
       transition: background 0.2s, border-color 0.2s;
-      white-space: nowrap;
     }
-    .btn:hover {
-      background: #eef4ff;
-      border-color: #8bbcff;
-    }
-
+    .btn:hover { background: #eef4ff; border-color: #8bbcff; }
     .empty, .error {
-      font-size: 14px;
-      padding: 16px;
-      border-radius: 8px;
-      background: #fff;
-      max-width: 520px;
+      font-size: 14px; padding: 16px; border-radius: 8px; background: #fff; max-width: 520px;
     }
-    .empty {
-      color: #666;
-      border: 1px dashed #ccc;
-    }
-    .error {
-      color: #b00020;
-      border: 1px solid #f1c0c4;
-      background: #fff7f7;
-    }
+    .empty { color: #666; border: 1px dashed #ccc; }
+    .error { color: #b00020; border: 1px solid #f1c0c4; background: #fff7f7; }
   </style>
 </head>
 <body>
-  <div class="topbar">
-    <h1 class="title">Computational Structure Database</h1>
+  <div class="sitebar">
+    <h1 class="site-title">Computational Structure Database</h1>
   </div>
 
   <div class="main">
@@ -150,71 +78,48 @@
   </div>
 
   <script>
-    // --- UniProt name cache and fetcher (best available name)
-    const uniprotNameCache = new Map(); // uid -> string | null | Promise<string|null>
-    const UNIPROT_BASE = 'https://rest.uniprot.org/uniprotkb/';
+    // ==== Configure where the names CSV lives ====
+    // Example (GitHub raw): 'https://raw.githubusercontent.com/your-org/uniprot-data/main/Protein-Metadata/protein_names.csv'
+    // Or same-domain hosting: '/uniprot-data/Protein-Metadata/protein_names.csv'
+    const PROTEIN_NAMES_URL = 'https://raw.githubusercontent.com/BM-DB/uniprot-data/refs/heads/main/Protein-Metadata/protein_names.csv';
 
-    async function fetchUniProtBestName(uid) {
-      if (!uid) return null;
-      if (uniprotNameCache.has(uid)) {
-        const v = uniprotNameCache.get(uid);
-        return v instanceof Promise ? v : v;
-        // if it was a resolved string/null, we return directly; if it's a Promise, await below
+    // Load names CSV (two headers: "UniProt ID","Protein Name")
+    async function loadNameMap() {
+      const map = new Map();
+      try {
+        const res = await fetch(PROTEIN_NAMES_URL + '?v=' + Date.now());
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const text = await res.text();
+        const lines = text.split(/\r?\n/).filter(l => l.trim().length);
+        if (!lines.length) return map;
+
+        // Simple CSV split: switch to a real CSV parser if fields can contain commas/quotes
+        const header = lines[0].split(',').map(s => s.trim());
+        const uidIdx = header.findIndex(h => /uniprot\s*id/i.test(h));
+        const nameIdx = header.findIndex(h => /protein\s*name/i.test(h));
+        if (uidIdx === -1 || nameIdx === -1) return map;
+
+        for (let i = 1; i < lines.length; i++) {
+          const parts = lines[i].split(',');
+          if (parts.length <= Math.max(uidIdx, nameIdx)) continue;
+          const uid = (parts[uidIdx] || '').trim();
+          const name = (parts[nameIdx] || '').trim();
+          if (uid) map.set(uid, name || '');
+        }
+      } catch (e) {
+        console.warn('Could not load protein_names.csv:', e);
       }
-      const p = (async () => {
-        try {
-          const res = await fetch(UNIPROT_BASE + encodeURIComponent(uid) + '.json', { cache: 'no-store' });
-          if (!res.ok) return null;
-          const data = await res.json();
-          const pd = data?.proteinDescription;
-
-          // Preferred: recommendedName fullName
-          const rec = pd?.recommendedName?.fullName?.value;
-          if (rec) return rec;
-
-          // Fallbacks: alternativeNames, submissionNames, shortName variants
-          const altArr = pd?.alternativeNames;
-          if (Array.isArray(altArr) && altArr.length) {
-            const altFull  = altArr[0]?.fullName?.value;
-            if (altFull) return altFull;
-            const altShort = altArr[0]?.shortName?.[0]?.value;
-            if (altShort) return altShort;
-          }
-          const subArr = pd?.submissionNames;
-          if (Array.isArray(subArr) && subArr.length) {
-            const subFull  = subArr[0]?.fullName?.value;
-            if (subFull) return subFull;
-            const subShort = subArr[0]?.shortName?.[0]?.value;
-            if (subShort) return subShort;
-          }
-
-          const recShort = pd?.recommendedName?.shortName?.[0]?.value;
-          if (recShort) return recShort;
-
-          return null;
-        } catch { return null; }
-      })();
-
-      // Store the promise first to coalesce concurrent requests
-      uniprotNameCache.set(uid, p);
-      const resolved = await p;
-      // Replace the promise with the final value
-      uniprotNameCache.set(uid, resolved);
-      return resolved;
+      return map;
     }
 
     async function loadCatalog() {
       const results = document.getElementById('results');
       try {
-        // IMPORTANT: match entry.html — catalog is one folder up in /data/
         const res = await fetch('../data/entries.json?v=' + Date.now());
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const json = await res.json();
-
-        // Support either { entries: [...] } or [...] at top level
         const entries = Array.isArray(json) ? json : (json.entries || []);
         if (!Array.isArray(entries)) throw new Error('entries.json is not an array');
-
         return entries;
       } catch (e) {
         console.error('Failed to load catalog:', e);
@@ -223,8 +128,8 @@
       }
     }
 
-    // Render token to avoid race when typing in search
     let renderToken = 0;
+    let NAME_MAP = new Map();
 
     function render(entries) {
       const token = ++renderToken;
@@ -252,7 +157,8 @@
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'entry-subtitle';
-        // initially blank; will populate asynchronously
+        const nm = NAME_MAP.get(entry.uniprot_id) || '';
+        if (nm) nameSpan.textContent = `— ${nm}`;
         title.appendChild(nameSpan);
 
         const desc = document.createElement('div');
@@ -273,22 +179,14 @@
         div.appendChild(info);
         div.appendChild(openBtn);
         results.appendChild(div);
-
-        // Fill the best-available UniProt name (non-blocking)
-        const uid = entry.uniprot_id;
-        if (uid) {
-          fetchUniProtBestName(uid).then(name => {
-            if (token !== renderToken) return; // stale render guard
-            if (name) nameSpan.textContent = `— ${name}`;
-          });
-        }
       });
     }
 
     async function main() {
+      NAME_MAP = await loadNameMap();   // names first so initial render shows them
       const entries = await loadCatalog();
-      const searchInput = document.getElementById('search');
 
+      const searchInput = document.getElementById('search');
       function filterAndRender() {
         const q = searchInput.value.trim().toLowerCase();
         const filtered = !q
