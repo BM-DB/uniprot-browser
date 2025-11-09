@@ -43,7 +43,7 @@
 
     #search {
       width: 100%;
-      max-width: 400px;
+      max-width: 420px;
       padding: 10px 12px;
       border: 1px solid var(--card-border);
       border-radius: 8px;
@@ -77,17 +77,20 @@
       display: flex;
       flex-direction: column;
       gap: 4px;
+      min-width: 0;
     }
 
     .entry-title {
       font-weight: 600;
       font-size: 15px;
       color: #111;
+      word-break: break-word;
     }
 
     .entry-desc {
       color: #555;
       font-size: 13px;
+      word-break: break-word;
     }
 
     .btn {
@@ -98,21 +101,28 @@
       background: #fff;
       font-size: 14px;
       transition: background 0.2s, border-color 0.2s;
+      white-space: nowrap;
     }
-
     .btn:hover {
       background: #eef4ff;
       border-color: #8bbcff;
     }
 
-    .empty {
+    .empty, .error {
       font-size: 14px;
-      color: #666;
       padding: 16px;
-      border: 1px dashed #ccc;
       border-radius: 8px;
       background: #fff;
-      max-width: 400px;
+      max-width: 520px;
+    }
+    .empty {
+      color: #666;
+      border: 1px dashed #ccc;
+    }
+    .error {
+      color: #b00020;
+      border: 1px solid #f1c0c4;
+      background: #fff7f7;
     }
   </style>
 </head>
@@ -128,15 +138,21 @@
 
   <script>
     async function loadCatalog() {
+      const results = document.getElementById('results');
       try {
-        const res = await fetch('data/entries.json?v=' + Date.now());
-        if (!res.ok) throw new Error('Could not load entries.json');
-        const data = await res.json();
-        return data.entries || [];
+        // IMPORTANT: match entry.html — catalog is one folder up in /data/
+        const res = await fetch('../data/entries.json?v=' + Date.now());
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const json = await res.json();
+
+        // Support either { entries: [...] } or [...] at top level
+        const entries = Array.isArray(json) ? json : (json.entries || []);
+        if (!Array.isArray(entries)) throw new Error('entries.json is not an array');
+
+        return entries;
       } catch (e) {
-        console.error(e);
-        const results = document.getElementById('results');
-        results.innerHTML = '<div class="empty">Error loading catalog.</div>';
+        console.error('Failed to load catalog:', e);
+        results.innerHTML = '<div class="error">Error loading catalog (entries.json). Check the file path and server logs.</div>';
         return [];
       }
     }
@@ -163,10 +179,11 @@
 
         const desc = document.createElement('div');
         desc.className = 'entry-desc';
-        desc.textContent = entry.description || '';
+        const descr = entry.description || (entry.organism ? `Organism: ${entry.organism}` : '');
+        if (descr) desc.textContent = descr;
 
         info.appendChild(title);
-        if (entry.description) info.appendChild(desc);
+        if (descr) info.appendChild(desc);
 
         const openBtn = document.createElement('button');
         openBtn.className = 'btn';
@@ -194,11 +211,10 @@
       }
 
       searchInput.addEventListener('input', filterAndRender);
-      render(entries);
+      filterAndRender();
     }
 
     main();
   </script>
 </body>
 </html>
-
