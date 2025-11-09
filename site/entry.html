@@ -9,17 +9,44 @@
   <link rel="stylesheet" href="https://unpkg.com/pdbe-molstar@3.7.1/build/pdbe-molstar-light.css" />
 
   <style>
-    :root { --gap: 12px; --card-border: #ddd; }
+    :root {
+      --gap: 12px;
+      --card-border: #ddd;
+      --sitebar-h: 70px; /* height of the global site header */
+    }
     html, body { height: 100%; margin: 0; background: #fff; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#222; }
 
-    .topbar { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--card-border); }
+    /* Top site header (matches index) */
+    .sitebar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--card-border);
+      background: #fff;
+      height: var(--sitebar-h);
+      box-sizing: border-box;
+    }
+    .site-title {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    /* Entry-specific header (back + id + name) */
+    .topbar {
+      display: flex; align-items: center; gap: 12px; padding: 12px 16px;
+      border-bottom: 1px solid var(--card-border);
+      background: #fff;
+    }
     .topbar a { text-decoration: none; }
     .title { font-size: 20px; font-weight: 600; margin: 0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .subtitle { font-weight: 400; color:#555; font-size: 16px; }
 
+    /* Main split layout (account for BOTH headers) */
     .main {
-      height: calc(100vh - 54px);
+      height: calc(100vh - var(--sitebar-h) - 54px);
       display: flex; gap: var(--gap);
       padding: var(--gap); box-sizing: border-box;
     }
@@ -88,6 +115,12 @@
   </style>
 </head>
 <body>
+  <!-- Global site header (same as index) -->
+  <div class="sitebar">
+    <h1 class="site-title">Computational Structure Database</h1>
+  </div>
+
+  <!-- Entry header -->
   <div class="topbar">
     <a href="index.html">← Back</a>
     <h1 class="title">
