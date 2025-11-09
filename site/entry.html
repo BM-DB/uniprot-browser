@@ -12,6 +12,8 @@
     :root {
       --gap: 12px;
       --card-border: #ddd;
+      --sitebar-h: 70px;  /* global header height */
+      --topbar-h: 54px;   /* entry header height */
     }
     html, body { height: 100%; margin: 0; background: #fff; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:#222; }
@@ -38,14 +40,16 @@
       display: flex; align-items: center; gap: 12px; padding: 12px 16px;
       border-bottom: 1px solid var(--card-border);
       background: #fff;
+      height: var(--topbar-h);            /* fixed height to match layout calc */
+      box-sizing: border-box;
     }
     .topbar a { text-decoration: none; }
     .title { font-size: 20px; font-weight: 600; margin: 0; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .subtitle { font-weight: 400; color:#555; font-size: 16px; }
 
-    /* Main split layout (account for BOTH headers) */
+    /* Main split layout (subtract BOTH headers) */
     .main {
-      height: calc(100vh - var(--sitebar-h) - 54px);
+      height: calc(100vh - var(--sitebar-h) - var(--topbar-h));
       display: flex; gap: var(--gap);
       padding: var(--gap); box-sizing: border-box;
     }
@@ -430,7 +434,6 @@
           if (subShort) return subShort;
         }
 
-        // Fallback: any shortName on the recommended block
         const recShort = pd?.recommendedName?.shortName?.[0]?.value;
         if (recShort) return recShort;
 
