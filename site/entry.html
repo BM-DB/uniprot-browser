@@ -5,40 +5,53 @@
   <title>Entry</title>
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- PDBe Mol* (3D viewer) -->
+  <!-- PDBe Mol* (viewer) -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-light.css">
   <script src="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-plugin.js"></script>
 
-  <!-- ProtVista (interactive sequence) -->
-  <script src="https://d3js.org/d3.v4.min.js"></script>
+  <!-- ProtVista (interactive sequence) requirements -->
+  <script src="https://d3js.org/d3.v4.min.js" charset="utf-8"></script>
   <script src="https://www.ebi.ac.uk/pdbe/pdb-component-library/js/protvista-pdb-3.3.0.js"></script>
 
   <style>
-    :root { --gap:16px }
-    body{ margin:0; font-family:system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-    header{
-      display:flex; gap:10px; align-items:center;
-      padding:12px 16px; border-bottom:1px solid #eee; background:#fafafa;
+    :root { --gap: 16px; }
+    html, body { margin: 0; background: #fff; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    header {
+      display:flex; align-items:center; gap:10px;
+      padding: 12px 16px; border-bottom:1px solid #eee; background:#fafafa;
     }
-    header a{ text-decoration:none }
-    h1{ margin:0; font-size:18px }
-    .muted{ color:#666; font-size:13px }
+    header a { text-decoration: none; }
+    h1 { margin:0; font-size:18px; font-weight:600; }
+    .muted { color:#666; font-size: 13px; }
 
-    .page{ display:grid; grid-template-columns: 1fr 1fr; gap:var(--gap); padding:16px; }
-    @media (max-width: 900px){ .page{ grid-template-columns: 1fr; } }
+    .page {
+      display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap);
+      padding: 16px;
+    }
+    @media (max-width: 900px) { .page { grid-template-columns: 1fr; } }
 
-    .panel{ border:1px solid #e5e5e5; border-radius:8px; overflow:hidden; background:#fff; }
-    .viewer-wrap{ height:640px }
-    #molstar{ width:100%; height:100% }
+    .panel {
+      background:#fff; border:1px solid #e5e5e5; border-radius:8px; overflow:hidden;
+      display:flex; flex-direction:column;
+    }
 
-    .seq-wrap{ height:640px; display:flex; flex-direction:column }
-    .seq-inner{ height:100%; padding:8px; }
-    protvista-pdb{ display:block; height:100% }
+    .viewer-wrap { height: 640px; }
+    #molstar { width:100%; height:100%; position:relative; }
 
-    .meta{ display:flex; gap:12px; align-items:center; padding:12px 16px; border-top:1px solid #eee }
-    .btn{ padding:6px 10px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer }
-    .error{ color:#b00020; padding:8px 16px }
-    .note{ color:#8a6b00; background:#fff8e1; border-top:1px solid #ffe9a8; padding:8px 16px; display:none }
+    .meta {
+      display:flex; gap:12px; align-items:center;
+      padding: 12px 16px; border-top:1px solid #eee; flex-wrap: wrap;
+    }
+    .meta a { text-decoration:none; }
+    .btn { padding: 6px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; background:#fff; }
+
+    .seq-wrap { height: 640px; }
+    .seq-inner { padding: 8px; height:100%; overflow:auto; }
+    protvista-pdb { display:block; height: 100%; }
+
+    .error { color:#b00020; padding: 8px 16px; }
+    .note { color:#8a6b00; background:#fff8e1; border-top:1px solid #ffe9a8; padding:8px 16px; display:none; }
   </style>
 </head>
 <body>
@@ -49,7 +62,7 @@
   </header>
 
   <div class="page">
-    <!-- LEFT: PDBe Mol* -->
+    <!-- LEFT: PDBe Mol* (embedded, minimal) -->
     <div class="panel">
       <div class="viewer-wrap">
         <div id="molstar" aria-label="3D structure viewer"></div>
@@ -63,7 +76,7 @@
       <div id="viewerErr" class="error" role="alert" aria-live="assertive"></div>
     </div>
 
-    <!-- RIGHT: ProtVista sequence -->
+    <!-- RIGHT: ProtVista (interactive sequence) -->
     <div class="panel seq-wrap">
       <div class="seq-inner">
         <protvista-pdb id="pv" custom-data="true" subscribe-events="true"></protvista-pdb>
@@ -73,12 +86,13 @@
   </div>
 
   <script>
-    // ---- tweak here if your chain is not 'A' ----
-    const CHAIN_ID_DEFAULT = 'A';
+    // === tweakables ===
+    const CHAIN_ID_DEFAULT = 'A';  // adjust if your structures use different chain IDs most often
+    const HIDE_CONTROLS = true;    // minimal Mol* UI
 
     function getParam(name){ return new URL(location.href).searchParams.get(name); }
 
-    function fastaToSeq(fastaText){
+    function fastaToSeq(fastaText) {
       if (!fastaText) return '';
       return fastaText
         .split(/\r?\n/)
@@ -103,15 +117,15 @@
       titleEl.textContent = uid || '(missing uid)';
       uidNoteEl.textContent = uid ? `· UniProt ID ${uid}` : '';
 
-      // Load entries.json
+      // Load entries.json (cache-busted)
       let entry;
       try {
         const catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r=>r.json());
         entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
-        if (!entry) throw new Error('NotInCatalog');
-      } catch (err) {
+        if (!entry) throw new Error('not-in-catalog');
+      } catch (e) {
         viewerErr.textContent = 'Could not find this entry in entries.json.';
-        console.error(err);
+        console.error(e);
         return;
       }
 
@@ -122,7 +136,12 @@
 
       // Fetch FASTA
       let fastaText = '';
-      try { fastaText = await fetch(fastaUrl).then(r => r.text()); } catch {}
+      try {
+        fastaText = await fetch(fastaUrl).then(r => r.text());
+      } catch (err) {
+        console.warn('FASTA fetch failed:', err);
+      }
+      // Copy FASTA button
       if (fastaText) {
         copyBtn.onclick = async () => {
           try {
@@ -135,20 +154,20 @@
         copyBtn.disabled = true;
       }
 
-      // ---- PDBe Mol* (left) ----
+      // ---- LEFT: PDBe Mol* ----
       let viewer;
       try {
         viewer = new PDBeMolstarPlugin();
         viewer.render(molDiv, {
           customData: { url: cifUrl, format: 'cif' }, // use 'mmcif' if needed
-          hideControls: true,
+          hideControls: HIDE_CONTROLS,
           leftPanel: false,
           rightPanel: false,
           sequencePanel: false,
           bgColor: 'white',
-          lighting: 'matte',
-          visualStyle: 'cartoon',
-          subscribeEvents: true
+          lighting: 'matte',          // soft lighting
+          subscribeEvents: true,
+          visualStyle: 'cartoon'
         });
       } catch (err) {
         viewerErr.textContent = '3D viewer failed to initialize.';
@@ -156,61 +175,70 @@
         return;
       }
 
-      // ---- ProtVista (right) ----
+      // ---- RIGHT: ProtVista (custom-data from your FASTA) ----
       const seq = fastaToSeq(fastaText);
       if (!seq) {
         pvNote.style.display = 'block';
-        pvNote.textContent = 'No sequence found in FASTA.';
-        pvEl.viewerdata = { displayNavigation: true, displaySequence: false, sequence:'', length:0, tracks:[] };
+        pvNote.textContent = 'No sequence found in FASTA; the interactive panel is hidden.';
+        pvEl.viewerdata = { displayNavigation: true, displaySequence: false, sequence:'', length: 0, tracks: [] };
         return;
       }
 
-      pvEl.viewerdata = {
-        displayNavigation: true,
-        displaySequence:   true,
-        sequence:          seq,
-        length:            seq.length,
-        offset:            1,
-        tracks: []
-      };
-
-      // ---- sequence → 3D selection ----
-      // We need a chainId to map 1D positions to residues; try to infer from Mol* model.
-      let chainId = CHAIN_ID_DEFAULT;
+      // Try to infer a chain ID; fall back to default.
+      let chainIdGuess = CHAIN_ID_DEFAULT;
       try {
         const plugin = viewer?.viewerInstance?.plugin;
         const structures = plugin?.managers?.structure?.hierarchy?.current?.structures || [];
         const first = structures[0];
         const ah = first?.cell?.obj?.data?.model?.atomicHierarchy;
-        const ids = ah?.chains?.label_asym_id?.toArray?.();
-        if (ids && ids.length) chainId = ids[0]; // pick the first chain; customize if needed
+        const chains = ah?.chains;
+        const label_asym_id = chains?.label_asym_id?.toArray?.();
+        if (label_asym_id && label_asym_id.length) chainIdGuess = label_asym_id[0];
       } catch (e) {
-        console.warn('Could not infer chainId; using default:', CHAIN_ID_DEFAULT);
+        console.warn('Could not infer chainId from Mol*; using default', CHAIN_ID_DEFAULT);
       }
 
-      function highlightRange(start, end){
+      // Provide ProtVista with sequence; add feature tracks later if you like.
+      pvEl.viewerdata = {
+        displayNavigation: true,
+        displaySequence: true,
+        sequence: seq,
+        length: seq.length,
+        offset: 1,
+        tracks: []
+      };
+
+      // --- Sequence selection -> 3D highlight ---
+      function selectRangeIn3D(start, end) {
         start = Math.max(1, Math.min(seq.length, start|0));
         end   = Math.max(1, Math.min(seq.length, end|0));
         if (end < start) [start, end] = [end, start];
+
         const data = [];
-        for (let r = start; r <= end; r++) data.push({ chainId, residueNumber: r });
+        for (let r = start; r <= end; r++) data.push({ chainId: chainIdGuess, residueNumber: r });
+
         try {
-          if (data.length) viewer.visual?.select?.({ data, nonSelectedOpacity: 0.25, focus: false });
-          else viewer.visual?.clearSelection?.();
+          if (data.length) {
+            viewer.visual?.select?.({ data, nonSelectedOpacity: 0.25, focus: false });
+          } else {
+            viewer.visual?.clearSelection?.();
+          }
         } catch (e) {
           console.warn('Mol* selection failed:', e);
         }
       }
 
-      // Listen to ProtVista events (name differs slightly across builds; cover common ones)
-      document.addEventListener('protvista-selection', e => {
+      // ProtVista emits custom events; listen for a couple of common ones.
+      document.addEventListener('protvista-selection', (e) => {
         const { start, end } = e.detail || {};
-        if (start && end) highlightRange(start, end);
+        if (start && end) selectRangeIn3D(start, end);
       });
-      document.addEventListener('protvista-click', e => {
+      document.addEventListener('protvista-click', (e) => {
         const { start, end } = e.detail || {};
-        if (start && end) highlightRange(start, end);
+        if (start && end) selectRangeIn3D(start, end);
       });
+
+      // (Optional) 3D -> sequence sync can be added once you decide how to visualize ranges in ProtVista.
     }
 
     load();
