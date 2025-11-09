@@ -5,116 +5,138 @@
   <title>Computational Structure Database</title>
   <link rel="stylesheet" href="styles.css" />
   <style>
-    :root {
-      --gap: 12px;
-      --card-border: #ddd;
-      --bg: #f8f9fb;
-      --card-bg: #fff;
-      --sitebar-h: 70px;
+    :root{
+      --gap:12px;
+      --card-border:#ddd;
+      --bg:#f8f9fb;
+      --card-bg:#fff;
+      --sitebar-h:70px;
     }
-    html, body {
-      height: 100%;
-      margin: 0;
-      background: var(--bg);
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
-      color: #222;
+    html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#222;}
+
+    /* Global site header (match entry.html) */
+    .sitebar{
+      display:flex;align-items:center;justify-content:space-between;
+      padding:16px 24px;border-bottom:1px solid var(--card-border);
+      background:#fff;height:var(--sitebar-h);box-sizing:border-box;
     }
-    .sitebar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px 24px;
-      border-bottom: 1px solid var(--card-border);
-      background: #fff;
-      height: var(--sitebar-h);
-      box-sizing: border-box;
+    .site-title{font-size:22px;font-weight:600;margin:0;}
+
+    .main{padding:24px;box-sizing:border-box;height:calc(100vh - var(--sitebar-h));overflow-y:auto;}
+
+    #search{
+      width:100%;max-width:520px;padding:10px 12px;border:1px solid var(--card-border);
+      border-radius:8px;font-size:15px;margin-bottom:24px;background:#fff;
+      box-shadow:0 1px 2px rgba(0,0,0,.04);
     }
-    .site-title { font-size: 22px; font-weight: 600; margin: 0; }
-    .main {
-      padding: 24px; box-sizing: border-box;
-      height: calc(100vh - var(--sitebar-h)); overflow-y: auto;
+
+    #results{display:flex;flex-direction:column;gap:12px;}
+
+    .entry{
+      border:1px solid var(--card-border);border-radius:8px;background:var(--card-bg);
+      padding:14px 18px;display:flex;justify-content:space-between;align-items:center;
+      transition:background .2s;
     }
-    #search {
-      width: 100%; max-width: 420px; padding: 10px 12px;
-      border: 1px solid var(--card-border); border-radius: 8px;
-      font-size: 15px; margin-bottom: 24px; background: #fff;
-      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    .entry:hover{background:#f5f8ff;}
+
+    .entry-info{display:flex;flex-direction:column;gap:4px;min-width:0;}
+
+    .entry-title{
+      font-weight:600;font-size:15px;color:#111;word-break:break-word;
+      display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;
     }
-    #results { display: flex; flex-direction: column; gap: 12px; }
-    .entry {
-      border: 1px solid var(--card-border); border-radius: 8px; background: var(--card-bg);
-      padding: 14px 18px; display: flex; justify-content: space-between; align-items: center;
-      transition: background 0.2s;
+    .entry-subtitle{font-weight:400;color:#555;font-size:13px;}
+
+    .entry-desc{color:#555;font-size:13px;word-break:break-word;}
+
+    .btn{
+      padding:7px 12px;border:1px solid var(--card-border);border-radius:6px;cursor:pointer;
+      background:#fff;font-size:14px;transition:background .2s,border-color .2s;white-space:nowrap;
     }
-    .entry:hover { background: #f5f8ff; }
-    .entry-info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-    .entry-title {
-      font-weight: 600; font-size: 15px; color: #111; word-break: break-word;
-      display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
-    }
-    .entry-subtitle { font-weight: 400; color: #555; font-size: 13px; }
-    .entry-desc { color: #555; font-size: 13px; word-break: break-word; }
-    .btn {
-      padding: 7px 12px; border: 1px solid var(--card-border); border-radius: 6px;
-      cursor: pointer; background: #fff; font-size: 14px; white-space: nowrap;
-      transition: background 0.2s, border-color 0.2s;
-    }
-    .btn:hover { background: #eef4ff; border-color: #8bbcff; }
-    .empty, .error {
-      font-size: 14px; padding: 16px; border-radius: 8px; background: #fff; max-width: 520px;
-    }
-    .empty { color: #666; border: 1px dashed #ccc; }
-    .error { color: #b00020; border: 1px solid #f1c0c4; background: #fff7f7; }
+    .btn:hover{background:#eef4ff;border-color:#8bbcff;}
+
+    .empty,.error{font-size:14px;padding:16px;border-radius:8px;background:#fff;max-width:520px;}
+    .empty{color:#666;border:1px dashed #ccc;}
+    .error{color:#b00020;border:1px solid #f1c0c4;background:#fff7f7;}
   </style>
 </head>
 <body>
+  <!-- Global header -->
   <div class="sitebar">
     <h1 class="site-title">Computational Structure Database</h1>
   </div>
 
   <div class="main">
-    <input id="search" placeholder="Search UniProt ID..." />
+    <input id="search" placeholder="Search by UniProt ID or protein name…" />
     <div id="results"></div>
   </div>
 
   <script>
-    // ==== Configure where the names CSV lives ====
-    // Example (GitHub raw): 'https://raw.githubusercontent.com/your-org/uniprot-data/main/Protein-Metadata/protein_names.csv'
-    // Or same-domain hosting: '/uniprot-data/Protein-Metadata/protein_names.csv'
-    const PROTEIN_NAMES_URL = 'https://raw.githubusercontent.com/BM-DB/uniprot-data/refs/heads/main/Protein-Metadata/protein_names.csv';
+    // ---- CONFIG: protein names CSV (UniProt ID, Protein Name) ----
+    // Keep this pointing at your uniprot-data repo's raw CSV:
+    const PROTEIN_NAMES_URL =
+      "https://raw.githubusercontent.com/BM-DB/uniprot-data/refs/heads/main/Protein-Metadata/protein_names.csv";
 
-    // Load names CSV (two headers: "UniProt ID","Protein Name")
-    async function loadNameMap() {
-      const map = new Map();
-      try {
-        const res = await fetch(PROTEIN_NAMES_URL + '?v=' + Date.now());
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const text = await res.text();
-        const lines = text.split(/\r?\n/).filter(l => l.trim().length);
-        if (!lines.length) return map;
-
-        // Simple CSV split: switch to a real CSV parser if fields can contain commas/quotes
-        const header = lines[0].split(',').map(s => s.trim());
-        const uidIdx = header.findIndex(h => /uniprot\s*id/i.test(h));
-        const nameIdx = header.findIndex(h => /protein\s*name/i.test(h));
-        if (uidIdx === -1 || nameIdx === -1) return map;
-
-        for (let i = 1; i < lines.length; i++) {
-          const parts = lines[i].split(',');
-          if (parts.length <= Math.max(uidIdx, nameIdx)) continue;
-          const uid = (parts[uidIdx] || '').trim();
-          const name = (parts[nameIdx] || '').trim();
-          if (uid) map.set(uid, name || '');
+    // ---- Small CSV parser that handles quoted commas & quotes ----
+    function parseCSV(text) {
+      const rows = [];
+      let i = 0, field = '', row = [], inQuotes = false;
+      while (i < text.length) {
+        const c = text[i];
+        if (inQuotes) {
+          if (c === '"') {
+            if (text[i + 1] === '"') { field += '"'; i += 2; continue; } // escaped quote
+            inQuotes = false; i++; continue; // end quote
+          } else {
+            field += c; i++; continue;
+          }
+        } else {
+          if (c === '"') { inQuotes = true; i++; continue; }
+          if (c === ',') { row.push(field); field = ''; i++; continue; }
+          if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+          if (c === '\r') { i++; continue; } // ignore CR
+          field += c; i++;
         }
-      } catch (e) {
-        console.warn('Could not load protein_names.csv:', e);
       }
-      return map;
+      // last field
+      row.push(field);
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      return rows;
+    }
+
+    async function fetchProteinNameMap() {
+      try {
+        const res = await fetch(PROTEIN_NAMES_URL, { cache: "no-store" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        const text = await res.text();
+        const rows = parseCSV(text);
+
+        // Find header indices
+        const header = rows[0]?.map(h => h.trim().toLowerCase()) || [];
+        const idIdx = header.indexOf("uniprot id");
+        const nameIdx = header.indexOf("protein name");
+        if (idIdx === -1 || nameIdx === -1) {
+          console.warn("protein_names.csv missing expected headers.");
+          return new Map();
+        }
+
+        const map = new Map();
+        for (let r = 1; r < rows.length; r++) {
+          const id = (rows[r][idIdx] || "").trim();
+          const name = (rows[r][nameIdx] || "").trim();
+          if (id) map.set(id.toUpperCase(), name);
+        }
+        return map;
+      } catch (e) {
+        console.error("Failed to load protein_names.csv:", e);
+        return new Map();
+      }
     }
 
     async function loadCatalog() {
       const results = document.getElementById('results');
       try {
+        // entries.json is one folder up in /data/
         const res = await fetch('../data/entries.json?v=' + Date.now());
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const json = await res.json();
@@ -128,8 +150,8 @@
       }
     }
 
+    // Render token to avoid races during typing
     let renderToken = 0;
-    let NAME_MAP = new Map();
 
     function render(entries) {
       const token = ++renderToken;
@@ -157,8 +179,11 @@
 
         const nameSpan = document.createElement('span');
         nameSpan.className = 'entry-subtitle';
-        const nm = NAME_MAP.get(entry.uniprot_id) || '';
-        if (nm) nameSpan.textContent = `— ${nm}`;
+        if (entry.protein_name) {
+          nameSpan.textContent = `— ${entry.protein_name}`;
+        } else {
+          nameSpan.textContent = ''; // no name available
+        }
         title.appendChild(nameSpan);
 
         const desc = document.createElement('div');
@@ -183,15 +208,26 @@
     }
 
     async function main() {
-      NAME_MAP = await loadNameMap();   // names first so initial render shows them
-      const entries = await loadCatalog();
+      // Load both datasets
+      const [entries, nameMap] = await Promise.all([loadCatalog(), fetchProteinNameMap()]);
+
+      // Merge names into entries array once so we don’t recompute on every keystroke
+      const entriesWithNames = entries.map(e => ({
+        ...e,
+        protein_name: nameMap.get((e.uniprot_id || '').toUpperCase()) || ''
+      }));
 
       const searchInput = document.getElementById('search');
+
       function filterAndRender() {
         const q = searchInput.value.trim().toLowerCase();
         const filtered = !q
-          ? entries
-          : entries.filter(e => (e.uniprot_id || '').toLowerCase().includes(q));
+          ? entriesWithNames
+          : entriesWithNames.filter(e => {
+              const id = (e.uniprot_id || '').toLowerCase();
+              const nm = (e.protein_name || '').toLowerCase();
+              return id.includes(q) || nm.includes(q);
+            });
         render(filtered);
       }
 
