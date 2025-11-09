@@ -78,6 +78,17 @@
 
     /* Error banner */
     .error { color: #b00020; padding: 8px 12px; border-top: 1px solid var(--card-border); background: #fff7f7; }
+
+    /* Interactive sequence strip */
+    .seq-strip { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .seq-chain { margin-bottom: 10px; }
+    .seq-chain h4 { margin: 8px 0 6px; font: 600 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    .seq-res {
+      display: inline-block; padding: 2px 3px; margin: 0 1px 1px 0; border-radius: 3px; cursor: pointer;
+      user-select: none;
+    }
+    .seq-res:hover { background:#eef6ff; }
+    .seq-res.active { background:#cfe8ff; outline: 1px solid #8bbcff; }
   </style>
 </head>
 <body>
@@ -103,7 +114,7 @@
         <a id="fastaLink" target="_blank" rel="noopener">FASTA</a>
         <button id="copyBtn" class="btn" type="button">Copy FASTA</button>
       </div>
-      <div class="seq-body">
+      <div class="seq-body" id="seq-body">
         <pre id="fasta">Loading...</pre>
       </div>
       <div id="seq-error" class="error" style="display:none;"></div>
@@ -122,6 +133,7 @@
       const fastaLink = document.getElementById('fastaLink');
       const viewerErr = document.getElementById('viewer-error');
       const seqErr = document.getElementById('seq-error');
+      const seqBody = document.getElementById('seq-body');
 
       titleEl.textContent = uid || '(missing uid)';
 
@@ -154,13 +166,14 @@
       cifLink.href   = cifUrl;
       fastaLink.href = fastaUrl;
 
-      // ---- Right: FASTA ----
+      // ---- Right: FASTA (fallback content kept) ----
+      let fastaText = '';
       try {
-        const t = await fetch(fastaUrl).then(r=>r.text());
-        fastaEl.textContent = t;
+        fastaText = await fetch(fastaUrl).then(r=>r.text());
+        fastaEl.textContent = fastaText || 'No FASTA text.';
         copyBtn.onclick = async () => {
           try {
-            await navigator.clipboard.writeText(t);
+            await navigator.clipboard.writeText(fastaText);
             const prev = copyBtn.textContent;
             copyBtn.textContent = 'Copied!';
             setTimeout(()=> (copyBtn.textContent = prev), 1200);
@@ -174,7 +187,6 @@
       }
 
       // ---- Left: PDBe Mol* (direct, no iframe) ----
-      // Decide format from extension; default mmcif
       const fmt = (cifUrl.toLowerCase().endsWith('.cif') && !cifUrl.toLowerCase().endsWith('.mmcif')) ? 'cif' : 'mmcif';
 
       let viewer;
@@ -186,13 +198,11 @@
         return;
       }
 
-      // Minimal, robust options
       const options = {
         customData: { url: cifUrl, format: fmt },
-        hideControls: true,          // hide UI chrome
-        expanded: false,             // keep compact layout
-        bgColor: { r:255, g:255, b:255 } // white background
-        // You can add: visualStyle: 'cartoon'  // PDBe option; defaults are good
+        hideControls: true,
+        expanded: false,
+        bgColor: { r:255, g:255, b:255 }
       };
 
       try {
@@ -219,19 +229,17 @@
       hideChrome(); setTimeout(hideChrome, 100); setTimeout(hideChrome, 500);
       new MutationObserver(hideChrome).observe(root, { childList:true, subtree:true });
 
-      // (Optional) Best-effort: mild ambient light + outline + uniform color
-      // Safe to leave in; if unsupported in this build, it’s ignored.
+      // Optional: soft lighting + outline + uniform color
       function styleScene() {
         try {
           const plugin = viewer?.viewerInstance?.plugin;
           const c3d = plugin?.canvas3d;
           if (c3d?.setProps) {
             c3d.setProps({
-              renderer: { ambientIntensity: 0.6 }, // “soft” feel
+              renderer: { ambientIntensity: 0.6 },
               postprocessing: { outline: { enable: true, scale: 1.0, threshold: 0.8 } }
             });
           }
-          // Uniform color (steel blue) if accessible
           const reps = plugin?.managers?.structure?.representation?.componentReprs || [];
           const val = { r: 70/255, g: 130/255, b: 180/255 };
           reps.forEach(cr => {
@@ -241,6 +249,128 @@
       }
       setTimeout(styleScene, 400);
       setTimeout(styleScene, 1200);
+
+      // ---- NEW: Build interactive sequence from the LOADED structure ----
+      // Wait until the structure is actually present (guard for different plugin timings)
+      async function waitForStructure(timeoutMs=4000) {
+        const start = performance.now();
+        const plugin = viewer?.viewerInstance?.plugin;
+        while (performance.now() - start < timeoutMs) {
+          const hier = plugin?.managers?.structure?.hierarchy?.current;
+          const sRef = hier?.structures?.[0];
+          const structure = sRef?.cell?.obj?.data?.structure;
+          const model = structure?.models?.[0];
+          if (model?.atomicHierarchy) return { plugin, structure, model };
+          await new Promise(r => setTimeout(r, 100));
+        }
+        return null;
+      }
+
+      function buildSeqStrip(model) {
+        const residues = model.atomicHierarchy.residues;
+        const chains   = model.atomicHierarchy.chains;
+        if (!residues || !chains) return null;
+
+        const labelCompId = residues.label_comp_id;   // 3-letter residue code
+        const authSeqId   = residues.auth_seq_id;     // residue number (auth)
+        const residueToChain = residues.chainIndex;   // index into chains
+        const asymIdArr   = chains.label_asym_id;     // struct_asym_id
+
+        if (!labelCompId || !authSeqId || !residueToChain || !asymIdArr) return null;
+
+        const byChain = new Map(); // asymId -> [{comp, auth, asym}]
+        const nResidues = residues._rowCount | 0;
+
+        for (let rI = 0; rI < nResidues; rI++) {
+          const cIdx = residueToChain[rI];
+          const asym = asymIdArr[cIdx];
+          const comp = labelCompId[rI];
+          const auth = authSeqId[rI];
+          if (!byChain.has(asym)) byChain.set(asym, []);
+          byChain.get(asym).push({ comp, auth, asym });
+        }
+
+        const to1 = (aa3) => {
+          const m = {
+            ALA:'A', ARG:'R', ASN:'N', ASP:'D', CYS:'C',
+            GLN:'Q', GLU:'E', GLY:'G', HIS:'H', ILE:'I',
+            LEU:'L', LYS:'K', MET:'M', PHE:'F', PRO:'P',
+            SER:'S', THR:'T', TRP:'W', TYR:'Y', VAL:'V',
+            SEC:'U', PYL:'O'
+          };
+          return m[aa3?.toUpperCase()] || 'X';
+        };
+
+        const container = document.createElement('div');
+        container.className = 'seq-strip';
+
+        const highlightOne = (asym, auth) => {
+          try {
+            viewer.visual.highlight([{ struct_asym_id: asym, start_residue_number: auth, end_residue_number: auth }]);
+          } catch {}
+        };
+        const clearHighlight = () => { try { viewer.visual.clearHighlight(); } catch {} };
+        const selectOne = (asym, auth) => {
+          try {
+            viewer.visual.clearSelection();
+            viewer.visual.select([{ struct_asym_id: asym, start_residue_number: auth, end_residue_number: auth }]);
+          } catch {}
+        };
+
+        byChain.forEach((list, asym) => {
+          const block = document.createElement('div');
+          block.className = 'seq-chain';
+
+          const header = document.createElement('h4');
+          header.textContent = `Chain ${asym}`;
+          block.appendChild(header);
+
+          list.forEach(res => {
+            const sp = document.createElement('span');
+            sp.className = 'seq-res';
+            sp.textContent = to1(res.comp);
+            sp.title = `${res.comp} ${res.auth}`;
+            sp.dataset.asym = res.asym;
+            sp.dataset.auth = String(res.auth);
+
+            sp.addEventListener('mouseenter', () => {
+              highlightOne(res.asym, res.auth);
+              sp.classList.add('active');
+            });
+            sp.addEventListener('mouseleave', () => {
+              clearHighlight();
+              sp.classList.remove('active');
+            });
+            sp.addEventListener('click', () => {
+              selectOne(res.asym, res.auth);
+              sp.classList.add('active');
+              setTimeout(() => sp.classList.remove('active'), 600);
+            });
+
+            block.appendChild(sp);
+          });
+
+          container.appendChild(block);
+        });
+
+        return container;
+      }
+
+      const loaded = await waitForStructure(5000);
+      if (loaded && loaded.model?.atomicHierarchy) {
+        const strip = buildSeqStrip(loaded.model);
+        if (strip) {
+          // Replace FASTA pane with interactive strip, keep FASTA available as a collapsed block below if you want:
+          seqBody.innerHTML = '';
+          seqBody.appendChild(strip);
+          // (Optional) keep a small toggle to show FASTA:
+          // const details = document.createElement('details');
+          // details.innerHTML = '<summary>Show FASTA</summary>';
+          // const pre = document.createElement('pre'); pre.textContent = fastaText;
+          // details.appendChild(pre); seqBody.appendChild(details);
+        }
+        // If strip is null, we silently keep the FASTA fallback already shown.
+      } // else: keep FASTA fallback
     }
 
     load();
