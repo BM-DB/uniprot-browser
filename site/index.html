@@ -12,7 +12,6 @@
       --card-bg:#fff;
       --sitebar-h:70px;
       --accent:#2563eb;
-      --placeholder:#7a7a7a; /* icon + placeholder synchronized */
     }
     html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#222;}
 
@@ -24,28 +23,12 @@
     }
     .site-title{font-size:22px;font-weight:600;margin:0;}
 
-    .main{
-      padding:24px;box-sizing:border-box;height:calc(100vh - var(--sitebar-h));
-      overflow-y:auto;display:flex;flex-direction:column;gap:16px;
-    }
+    .main{padding:24px;box-sizing:border-box;height:calc(100vh - var(--sitebar-h));overflow-y:auto;display:flex;flex-direction:column;gap:16px;}
 
-    /* Search input with right-locked icon (absolute inside relative wrapper) */
-    .search-wrap{
-      position:relative;max-width:520px;width:100%;
-    }
     #search{
-      display:block;width:100%;
-      padding:10px 10px 10px 12px; /* right padding ≥ icon width + gap */
-      border:1px solid var(--card-border);
+      width:100%;max-width:520px;padding:10px 12px;border:1px solid var(--card-border);
       border-radius:8px;font-size:15px;background:#fff;
       box-shadow:0 1px 2px rgba(0,0,0,.04);
-    }
-    #search::placeholder{ color:var(--placeholder); opacity:1; }
-
-    .search-icon{
-      position:absolute;right:12px;top:50%;transform:translateY(-50%);
-      width:18px;height:18px;color:var(--placeholder);
-      pointer-events:none; /* purely decorative */
     }
 
     #results{display:flex;flex-direction:column;gap:12px;}
@@ -103,20 +86,14 @@
   </div>
 
   <div class="main">
-    <div class="search-wrap">
-      <input id="search" placeholder="Search by UniProt ID or protein name…" aria-label="Search entries" />
-      <!-- Decorative magnifying glass icon (uses currentColor -> matches placeholder) -->
-      <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path fill="currentColor" d="M10.5 3a7.5 7.5 0 0 1 5.89 12.23l4.19 4.18a1 1 0 1 1-1.42 1.42l-4.18-4.19A7.5 7.5 0 1 1 10.5 3zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11z"/>
-      </svg>
-    </div>
-
+    <input id="search" placeholder="Search by UniProt ID or protein name…" aria-label="Search entries" />
     <div id="results"></div>
     <nav id="pagination" class="pagination" aria-label="Results pagination"></nav>
   </div>
 
   <script>
     // ---- CONFIG: protein names CSV (UniProt ID, Protein Name) ----
+    // Keep this pointing at your uniprot-data repo's raw CSV:
     const PROTEIN_NAMES_URL =
       "https://raw.githubusercontent.com/BM-DB/uniprot-data/refs/heads/main/Protein-Metadata/protein_names.csv";
 
@@ -144,6 +121,7 @@
           field += c; i++;
         }
       }
+      // last field
       row.push(field);
       if (row.length > 1 || row[0] !== '') rows.push(row);
       return rows;
