@@ -11,6 +11,7 @@
       --bg:#f8f9fb;
       --card-bg:#fff;
       --sitebar-h:70px;
+      --accent:#2563eb;
     }
     html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#222;}
 
@@ -22,11 +23,11 @@
     }
     .site-title{font-size:22px;font-weight:600;margin:0;}
 
-    .main{padding:24px;box-sizing:border-box;height:calc(100vh - var(--sitebar-h));overflow-y:auto;}
+    .main{padding:24px;box-sizing:border-box;height:calc(100vh - var(--sitebar-h));overflow-y:auto;display:flex;flex-direction:column;gap:16px;}
 
     #search{
       width:100%;max-width:520px;padding:10px 12px;border:1px solid var(--card-border);
-      border-radius:8px;font-size:15px;margin-bottom:24px;background:#fff;
+      border-radius:8px;font-size:15px;background:#fff;
       box-shadow:0 1px 2px rgba(0,0,0,.04);
     }
 
@@ -58,6 +59,24 @@
     .empty,.error{font-size:14px;padding:16px;border-radius:8px;background:#fff;max-width:520px;}
     .empty{color:#666;border:1px dashed #ccc;}
     .error{color:#b00020;border:1px solid #f1c0c4;background:#fff7f7;}
+
+    /* Pagination */
+    .pagination{
+      display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:8px;
+    }
+    .pager{
+      display:inline-flex;align-items:center;justify-content:center;
+      min-width:36px;height:36px;padding:0 10px;border:1px solid var(--card-border);
+      border-radius:8px;background:#fff;cursor:pointer;font-size:14px;
+      transition:background .2s,border-color .2s;
+    }
+    .pager:hover{background:#eef4ff;border-color:#8bbcff;}
+    .pager[disabled]{opacity:.5;cursor:not-allowed;background:#f5f5f5;}
+    .pager.is-active{
+      border-color:var(--accent);background:#eef2ff;font-weight:600;
+    }
+    .page-meta{font-size:13px;color:#555;margin-left:auto;}
+    .pager-ellipsis{padding:0 6px;color:#777;user-select:none;}
   </style>
 </head>
 <body>
@@ -67,8 +86,9 @@
   </div>
 
   <div class="main">
-    <input id="search" placeholder="Search by UniProt ID or protein name…" />
+    <input id="search" placeholder="Search by UniProt ID or protein name…" aria-label="Search entries" />
     <div id="results"></div>
+    <nav id="pagination" class="pagination" aria-label="Results pagination"></nav>
   </div>
 
   <script>
@@ -76,6 +96,9 @@
     // Keep this pointing at your uniprot-data repo's raw CSV:
     const PROTEIN_NAMES_URL =
       "https://raw.githubusercontent.com/BM-DB/uniprot-data/refs/heads/main/Protein-Metadata/protein_names.csv";
+
+    // Pagination config
+    const PAGE_SIZE = 10;
 
     // ---- Small CSV parser that handles quoted commas & quotes ----
     function parseCSV(text) {
@@ -150,11 +173,8 @@
       }
     }
 
-    // Render token to avoid races during typing
-    let renderToken = 0;
-
-    function render(entries) {
-      const token = ++renderToken;
+    // Render the list for a specific page (1-based)
+    function renderList(entries, page) {
       const results = document.getElementById('results');
       results.innerHTML = '';
 
@@ -163,7 +183,14 @@
         return;
       }
 
-      entries.forEach(entry => {
+      const total = entries.length;
+      const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      const clampedPage = Math.min(Math.max(1, page), totalPages);
+      const start = (clampedPage - 1) * PAGE_SIZE;
+      const end = Math.min(start + PAGE_SIZE, total);
+      const pageItems = entries.slice(start, end);
+
+      pageItems.forEach(entry => {
         const div = document.createElement('div');
         div.className = 'entry';
 
@@ -182,7 +209,7 @@
         if (entry.protein_name) {
           nameSpan.textContent = `— ${entry.protein_name}`;
         } else {
-          nameSpan.textContent = ''; // no name available
+          nameSpan.textContent = '';
         }
         title.appendChild(nameSpan);
 
@@ -205,34 +232,121 @@
         div.appendChild(openBtn);
         results.appendChild(div);
       });
+
+      renderPagination(total, clampedPage, totalPages);
+    }
+
+    // Build pagination controls
+    function renderPagination(totalItems, page, totalPages) {
+      const nav = document.getElementById('pagination');
+      nav.innerHTML = '';
+
+      if (totalItems === 0) return;
+
+      const makeBtn = (label, onClick, {disabled=false, active=false, ariaLabel=null}={}) => {
+        const b = document.createElement('button');
+        b.className = 'pager' + (active ? ' is-active' : '');
+        b.type = 'button';
+        b.textContent = label;
+        if (ariaLabel) b.setAttribute('aria-label', ariaLabel);
+        if (disabled) b.setAttribute('disabled', 'true');
+        if (!disabled && onClick) b.addEventListener('click', onClick);
+        return b;
+      };
+
+      // Prev
+      nav.appendChild(
+        makeBtn('‹ Prev', () => goToPage(page - 1), {
+          disabled: page <= 1,
+          ariaLabel: 'Go to previous page'
+        })
+      );
+
+      // Page number window (smart: show first, last, current ±2)
+      const pagesToShow = new Set([1, totalPages]);
+      for (let p = page - 2; p <= page + 2; p++) {
+        if (p >= 1 && p <= totalPages) pagesToShow.add(p);
+      }
+      const ordered = Array.from(pagesToShow).sort((a,b)=>a-b);
+
+      ordered.forEach((p, idx) => {
+        if (idx > 0 && p !== ordered[idx - 1] + 1) {
+          const ell = document.createElement('span');
+          ell.className = 'pager-ellipsis';
+          ell.setAttribute('aria-hidden', 'true');
+          ell.textContent = '…';
+          nav.appendChild(ell);
+        }
+        nav.appendChild(
+          makeBtn(String(p), () => goToPage(p), {
+            active: p === page,
+            ariaLabel: `Go to page ${p}`
+          })
+        );
+      });
+
+      // Next
+      nav.appendChild(
+        makeBtn('Next ›', () => goToPage(page + 1), {
+          disabled: page >= totalPages,
+          ariaLabel: 'Go to next page'
+        })
+      );
+
+      // Meta text
+      const meta = document.createElement('div');
+      meta.className = 'page-meta';
+      const start = (page - 1) * PAGE_SIZE + 1;
+      const end = Math.min(page * PAGE_SIZE, totalItems);
+      meta.textContent = `Showing ${start}–${end} of ${totalItems}`;
+      nav.appendChild(meta);
+    }
+
+    // Global state (within this page)
+    let allEntriesWithNames = [];
+    let currentFiltered = [];
+    let currentPage = 1;
+
+    function goToPage(p) {
+      const totalPages = Math.max(1, Math.ceil(currentFiltered.length / PAGE_SIZE));
+      currentPage = Math.min(Math.max(1, p), totalPages);
+      renderList(currentFiltered, currentPage);
+      // Move focus to results wrapper for better SR/keyboard experience
+      document.getElementById('results').setAttribute('tabindex', '-1');
+      document.getElementById('results').focus({preventScroll:true});
+    }
+
+    function applyFilterAndRender() {
+      const searchInput = document.getElementById('search');
+      const q = searchInput.value.trim().toLowerCase();
+      currentFiltered = !q
+        ? allEntriesWithNames
+        : allEntriesWithNames.filter(e => {
+            const id = (e.uniprot_id || '').toLowerCase();
+            const nm = (e.protein_name || '').toLowerCase();
+            return id.includes(q) || nm.includes(q);
+          });
+      currentPage = 1; // reset to first page on new filter
+      renderList(currentFiltered, currentPage);
     }
 
     async function main() {
       // Load both datasets
       const [entries, nameMap] = await Promise.all([loadCatalog(), fetchProteinNameMap()]);
 
-      // Merge names into entries array once so we don’t recompute on every keystroke
-      const entriesWithNames = entries.map(e => ({
+      // Merge names into entries array once
+      allEntriesWithNames = entries.map(e => ({
         ...e,
         protein_name: nameMap.get((e.uniprot_id || '').toUpperCase()) || ''
       }));
 
+      // Hook up search
       const searchInput = document.getElementById('search');
+      searchInput.addEventListener('input', applyFilterAndRender);
 
-      function filterAndRender() {
-        const q = searchInput.value.trim().toLowerCase();
-        const filtered = !q
-          ? entriesWithNames
-          : entriesWithNames.filter(e => {
-              const id = (e.uniprot_id || '').toLowerCase();
-              const nm = (e.protein_name || '').toLowerCase();
-              return id.includes(q) || nm.includes(q);
-            });
-        render(filtered);
-      }
-
-      searchInput.addEventListener('input', filterAndRender);
-      filterAndRender();
+      // Initial render
+      currentFiltered = allEntriesWithNames;
+      renderList(currentFiltered, currentPage);
     }
 
     main();

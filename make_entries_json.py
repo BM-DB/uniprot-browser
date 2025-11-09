@@ -3,7 +3,7 @@ import csv, json, re
 from pathlib import Path
 
 # === CONFIGURE THESE VALUES (pre-filled from your setup) ===
-CSV_PATH    = Path('/Users/aplab/Desktop/000 - Boltz-2 individual/input UniProt ID test.csv')
+CSV_PATH    = Path('/Users/aplab/Desktop/000 - Boltz-2 individual/Boltz-2 predictions/All Monomers UniProt ID.csv')
 REPO_ROOT   = Path('/Users/aplab/Desktop/000 - Boltz-2 individual/GitHub Test Dataset/uniprot-data')  # repo root
 DATA_PARENT = REPO_ROOT / 'UniProt-Dataset'  # ID folders live under this subfolder
 
