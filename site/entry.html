@@ -3,133 +3,86 @@
 <head>
   <meta charset="utf-8" />
   <title>Entry</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- Nightingale Sequence (sequence viewer) -->
-  <script type="module">
-    import 'https://cdn.jsdelivr.net/npm/@nightingale-elements/nightingale-sequence@7.4.0/dist/index.js';
-  </script>
+  <!-- PDBe Mol* CSS + JS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar.css" />
+  <script src="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-plugin.js"></script>
+
+  <!-- ProtVista PDB local -->
+  <script src="./vendor/protvista-pdb/d3.v4.min.js"></script>
+  <script src="./vendor/protvista-pdb/protvista-pdb-3.3.0.js"></script>
 
   <style>
-    :root { --gap: 16px; }
-    html, body { margin: 0; background: #fff; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
-
-    header {
-      display:flex; align-items:center; gap:10px;
-      padding: 12px 16px; border-bottom:1px solid #eee; background:#fafafa;
-    }
-    header a { text-decoration: none; }
-    h1 { margin:0; font-size:18px; font-weight:600; }
-    .muted { color:#666; font-size: 13px; }
-
-    .page {
-      display: grid; grid-template-columns: 1fr 1fr; gap: var(--gap);
-      padding: 16px;
-    }
-    @media (max-width: 900px) { .page { grid-template-columns: 1fr; } }
-
-    .panel {
-      background:#fff; border:1px solid #e5e5e5; border-radius:8px; overflow:hidden;
-      display:flex; flex-direction:column;
-    }
-
-    /* LEFT: structure iframe */
-    .viewer-wrap { height: 640px; }
-    #viewer-frame { width:100%; height:100%; border:0; display:block; background:#fff; }
-
-    .meta {
-      display:flex; gap:12px; align-items:center;
-      padding: 12px 16px; border-top:1px solid #eee; flex-wrap: wrap;
-    }
-    .meta a { text-decoration:none; }
-    .btn { padding: 6px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; background:#fff; }
-
-    /* RIGHT: Nightingale sequence */
-    .seq-wrap { height: 640px; display:flex; flex-direction:column; }
-    .seq-inner { flex:1 1 auto; min-height:200px; overflow:hidden; }
-    nightingale-sequence { display:block; width:100%; height:100%; min-height:200px; }
-
-    .error { color:#b00020; padding: 8px 16px; }
-    .note { color:#8a6b00; background:#fff8e1; border-top:1px solid #ffe9a8; padding:8px 16px; display:none; }
+    body { margin:16px; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#fafafa; }
+    h1 { margin-top: 0; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .card { background:#fff; border:1px solid #ddd; border-radius:8px; min-height:640px; display:flex; flex-direction:column; }
+    .card-header { padding:8px 12px; background:#f7f7f7; border-bottom:1px solid #ddd; font-weight:600; }
+    .card-body { position:relative; flex:1 1 auto; }
+    #molstar { position:absolute; inset:0; }
+    #seqPanel { position:absolute; inset:0; }
+    protvista-pdb { display:block; width:100%; height:100%; }
+    .meta { margin:12px 0; display:flex; gap:12px; align-items:center; }
+    .btn { padding:6px 10px; border:1px solid #ddd; border-radius:6px; background:#fff; cursor:pointer; }
+    .error { color:#b00020; margin-top:8px; }
+    @media(max-width:900px){ .row { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
-  <header>
-    <a href="index.html">← Back</a>
-    <h1 id="title"></h1>
-    <span id="uidNote" class="muted"></span>
-  </header>
+  <a href="index.html">← Back</a>
+  <h1 id="title"></h1>
 
-  <div class="page">
-    <!-- LEFT: Structure (Mol* hosted viewer in minimal mode via iframe) -->
-    <div class="panel">
-      <div class="viewer-wrap">
-        <iframe id="viewer-frame" src="about:blank" title="Mol* Viewer (minimal)"></iframe>
-      </div>
-      <div class="meta">
-        <strong>Files:</strong>
-        <a id="cifLink"   target="_blank" rel="noopener">CIF</a>
-        <a id="fastaLink" target="_blank" rel="noopener">FASTA</a>
-        <button id="copyBtn" class="btn" type="button">Copy FASTA</button>
-      </div>
-      <div id="viewerErr" class="error" role="alert" aria-live="assertive"></div>
-    </div>
+  <div class="meta">
+    <strong>Files:</strong>
+    <a id="cifLink" target="_blank" rel="noopener">CIF</a>
+    <a id="fastaLink" target="_blank" rel="noopener">FASTA</a>
+    <button id="copyBtn" class="btn" type="button">Copy FASTA</button>
+  </div>
 
-    <!-- RIGHT: Sequence (Nightingale) -->
-    <div class="panel seq-wrap">
-      <div class="seq-inner">
-        <nightingale-sequence
-          id="ng-seq"
-          length="0"
-          display-start="1"
-          display-end="0"
-          height="640"
-          use-letters
-          highlight-on-hover
-        ></nightingale-sequence>
-      </div>
-      <div id="seqNote" class="note"></div>
-    </div>
+  <div id="err" class="error"></div>
+
+  <div class="row">
+    <!-- Left: 3D viewer -->
+    <section class="card">
+      <div class="card-header">Structure</div>
+      <div class="card-body"><div id="molstar"></div></div>
+    </section>
+
+    <!-- Right: Sequence panel (ProtVista PDB) -->
+    <section class="card">
+      <div class="card-header">Sequence</div>
+      <div class="card-body"><div id="seqPanel"><protvista-pdb id="seq"></protvista-pdb></div></div>
+    </section>
   </div>
 
   <script>
-    function getParam(name){ return new URL(location.href).searchParams.get(name); }
+    function getParam(name) { return new URL(location.href).searchParams.get(name); }
 
-    function fastaToSeq(fastaText) {
-      if (!fastaText) return '';
-      return fastaText
-        .split(/\r?\n/)
-        .filter((ln, i) => !(i === 0 && ln.startsWith('>')))
-        .join('')
-        .replace(/\s+/g, '')
-        .toUpperCase();
-    }
-
-    async function load(){
-      const uid       = getParam('uid');
-      const titleEl   = document.getElementById('title');
-      const uidNoteEl = document.getElementById('uidNote');
-      const viewerErr = document.getElementById('viewerErr');
-      const cifLink   = document.getElementById('cifLink');
+    async function load() {
+      const uid = getParam('uid');
+      const titleEl = document.getElementById('title');
+      const errEl = document.getElementById('err');
+      const cifLink = document.getElementById('cifLink');
       const fastaLink = document.getElementById('fastaLink');
-      const copyBtn   = document.getElementById('copyBtn');
-      const frame     = document.getElementById('viewer-frame');
-      const ng        = document.getElementById('ng-seq');
-      const seqNote   = document.getElementById('seqNote');
+      const copyBtn = document.getElementById('copyBtn');
 
       titleEl.textContent = uid || '(missing uid)';
-      uidNoteEl.textContent = uid ? `· UniProt ID ${uid}` : '';
 
-      // Load entries.json (cache-busted)
-      let entry;
+      let catalog;
       try {
-        const catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r=>r.json());
-        entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
-        if (!entry) throw new Error('not-in-catalog');
-      } catch (e) {
-        viewerErr.textContent = 'Could not find this entry in entries.json.';
+        catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r=>r.json());
+      } catch(e) {
+        errEl.textContent = 'Could not load entries.json.';
         console.error(e);
+        return;
+      }
+
+      const entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
+      if (!entry) {
+        errEl.textContent = 'Entry not found in catalog.';
         return;
       }
 
@@ -138,56 +91,40 @@
       cifLink.href   = cifUrl;
       fastaLink.href = fastaUrl;
 
-      // LEFT: minimal Mol* hosted viewer (unchanged)
-      const encodedCif = encodeURIComponent(cifUrl);
-      const viewerUrl =
-        `https://molstar.org/viewer/?structure-url=${encodedCif}` +
-        `&structure-url-format=mmcif&hide-controls=1`;
-      frame.src = viewerUrl;
-
-      // Fetch FASTA, show Copy button
+      // Load FASTA text
       let fastaText = '';
       try {
-        fastaText = await fetch(fastaUrl).then(r => r.text());
-      } catch (err) {
-        console.warn('FASTA fetch failed:', err);
-      }
-      if (fastaText) {
+        fastaText = await fetch(fastaUrl).then(r=>r.text());
         copyBtn.onclick = async () => {
-          try {
-            await navigator.clipboard.writeText(fastaText);
-            copyBtn.textContent = 'Copied!';
-            setTimeout(()=> (copyBtn.textContent = 'Copy FASTA'), 1200);
-          } catch {}
+          await navigator.clipboard.writeText(fastaText);
+          copyBtn.textContent = 'Copied!';
+          setTimeout(()=> (copyBtn.textContent = 'Copy FASTA'), 1200);
         };
-      } else {
+      } catch(e) {
         copyBtn.disabled = true;
       }
 
-      // RIGHT: Nightingale sequence setup
-      const seq = fastaToSeq(fastaText);
-      if (!seq) {
-        seqNote.style.display = 'block';
-        seqNote.textContent = 'No sequence found in FASTA.';
-        return;
-      }
-
-      // Configure the sequence component
-      // Nightingale auto-renders when properties change.
-      ng.sequence     = seq;               // full sequence (letters)
-      ng.length       = seq.length;        // total residues
-      ng.displayStart = 1;                 // show entire sequence by default
-      ng.displayEnd   = seq.length;
-
-      // Optional: respond to clicks (you’ll see positions in the console)
-      // Different versions may emit 'click' or 'positionChange' with detail { position }
-      ng.addEventListener('click', (e) => {
-        const pos = e.detail?.position ?? e.target?.position;
-        if (pos) console.log('Clicked residue', pos);
+      // -------------------------------------------------------------------------
+      // 1) Initialize Mol* viewer
+      const viewer = new PDBeMolstarPlugin();
+      await viewer.render('molstar', {
+        customData: { url: cifUrl, format: 'cif' },
+        hideControls: true,
+        bgColor: { r:255, g:255, b:255 }
       });
-      ng.addEventListener('positionChange', (e) => {
-        const pos = e.detail?.position;
-        if (pos) console.log('Position changed to', pos);
+
+      // -------------------------------------------------------------------------
+      // 2) Initialize ProtVista PDB (sequence panel)
+      const pv = document.getElementById('seq');
+      // Use the UniProt accession directly (ProtVista knows how to fetch annotations)
+      pv.accession = uid;
+
+      // 3) Set up interactive linking: sequence selection → structure highlight
+      pv.addEventListener('change', e => {
+        const d = e.detail || {};
+        const start = d.start|0, end = d.end|0;
+        if (!start || !end) return;
+        viewer.visual.select({ data: { residues: [{ start, end }] } });
       });
     }
 
