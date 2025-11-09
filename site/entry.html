@@ -5,18 +5,16 @@
   <title>Entry</title>
   <link rel="stylesheet" href="styles.css" />
 
-  <!-- PDBe Mol* (viewer) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-light.css">
-  <script src="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-plugin.js"></script>
-
-  <!-- ProtVista (interactive sequence) requirements -->
-  <script src="https://d3js.org/d3.v4.min.js" charset="utf-8"></script>
-  <script src="https://www.ebi.ac.uk/pdbe/pdb-component-library/js/protvista-pdb-3.3.0.js"></script>
+  <!-- Nightingale Sequence (sequence viewer) -->
+  <script type="module">
+    import 'https://unpkg.com/@nightingale-elements/nightingale-sequence@7.4.0/dist/index.js';
+  </script>
 
   <style>
     :root { --gap: 16px; }
     html, body { margin: 0; background: #fff; }
     body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+
     header {
       display:flex; align-items:center; gap:10px;
       padding: 12px 16px; border-bottom:1px solid #eee; background:#fafafa;
@@ -36,8 +34,9 @@
       display:flex; flex-direction:column;
     }
 
+    /* LEFT: structure iframe */
     .viewer-wrap { height: 640px; }
-    #molstar { width:100%; height:100%; position:relative; }
+    #viewer-frame { width:100%; height:100%; border:0; display:block; background:#fff; }
 
     .meta {
       display:flex; gap:12px; align-items:center;
@@ -46,9 +45,10 @@
     .meta a { text-decoration:none; }
     .btn { padding: 6px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; background:#fff; }
 
-    .seq-wrap { height: 640px; }
-    .seq-inner { padding: 8px; height:100%; overflow:auto; }
-    protvista-pdb { display:block; height: 100%; }
+    /* RIGHT: Nightingale sequence */
+    .seq-wrap { height: 640px; display:flex; flex-direction:column; }
+    .seq-inner { flex:1 1 auto; min-height:200px; overflow:hidden; }
+    nightingale-sequence { display:block; width:100%; height:100%; min-height:200px; }
 
     .error { color:#b00020; padding: 8px 16px; }
     .note { color:#8a6b00; background:#fff8e1; border-top:1px solid #ffe9a8; padding:8px 16px; display:none; }
@@ -62,10 +62,10 @@
   </header>
 
   <div class="page">
-    <!-- LEFT: PDBe Mol* (embedded, minimal) -->
+    <!-- LEFT: Structure (Mol* hosted viewer in minimal mode via iframe) -->
     <div class="panel">
       <div class="viewer-wrap">
-        <div id="molstar" aria-label="3D structure viewer"></div>
+        <iframe id="viewer-frame" src="about:blank" title="Mol* Viewer (minimal)"></iframe>
       </div>
       <div class="meta">
         <strong>Files:</strong>
@@ -76,20 +76,24 @@
       <div id="viewerErr" class="error" role="alert" aria-live="assertive"></div>
     </div>
 
-    <!-- RIGHT: ProtVista (interactive sequence) -->
+    <!-- RIGHT: Sequence (Nightingale) -->
     <div class="panel seq-wrap">
       <div class="seq-inner">
-        <protvista-pdb id="pv" custom-data="true" subscribe-events="true"></protvista-pdb>
+        <nightingale-sequence
+          id="ng-seq"
+          length="0"
+          display-start="1"
+          display-end="0"
+          height="640"
+          use-letters
+          highlight-on-hover
+        ></nightingale-sequence>
       </div>
-      <div id="pvNote" class="note"></div>
+      <div id="seqNote" class="note"></div>
     </div>
   </div>
 
   <script>
-    // === tweakables ===
-    const CHAIN_ID_DEFAULT = 'A';  // adjust if your structures use different chain IDs most often
-    const HIDE_CONTROLS = true;    // minimal Mol* UI
-
     function getParam(name){ return new URL(location.href).searchParams.get(name); }
 
     function fastaToSeq(fastaText) {
@@ -107,12 +111,12 @@
       const titleEl   = document.getElementById('title');
       const uidNoteEl = document.getElementById('uidNote');
       const viewerErr = document.getElementById('viewerErr');
-      const pvNote    = document.getElementById('pvNote');
       const cifLink   = document.getElementById('cifLink');
       const fastaLink = document.getElementById('fastaLink');
       const copyBtn   = document.getElementById('copyBtn');
-      const molDiv    = document.getElementById('molstar');
-      const pvEl      = document.getElementById('pv');
+      const frame     = document.getElementById('viewer-frame');
+      const ng        = document.getElementById('ng-seq');
+      const seqNote   = document.getElementById('seqNote');
 
       titleEl.textContent = uid || '(missing uid)';
       uidNoteEl.textContent = uid ? `· UniProt ID ${uid}` : '';
@@ -134,14 +138,20 @@
       cifLink.href   = cifUrl;
       fastaLink.href = fastaUrl;
 
-      // Fetch FASTA
+      // LEFT: minimal Mol* hosted viewer (unchanged)
+      const encodedCif = encodeURIComponent(cifUrl);
+      const viewerUrl =
+        `https://molstar.org/viewer/?structure-url=${encodedCif}` +
+        `&structure-url-format=mmcif&hide-controls=1`;
+      frame.src = viewerUrl;
+
+      // Fetch FASTA, show Copy button
       let fastaText = '';
       try {
         fastaText = await fetch(fastaUrl).then(r => r.text());
       } catch (err) {
         console.warn('FASTA fetch failed:', err);
       }
-      // Copy FASTA button
       if (fastaText) {
         copyBtn.onclick = async () => {
           try {
@@ -154,91 +164,31 @@
         copyBtn.disabled = true;
       }
 
-      // ---- LEFT: PDBe Mol* ----
-      let viewer;
-      try {
-        viewer = new PDBeMolstarPlugin();
-        viewer.render(molDiv, {
-          customData: { url: cifUrl, format: 'cif' }, // use 'mmcif' if needed
-          hideControls: HIDE_CONTROLS,
-          leftPanel: false,
-          rightPanel: false,
-          sequencePanel: false,
-          bgColor: 'white',
-          lighting: 'matte',          // soft lighting
-          subscribeEvents: true,
-          visualStyle: 'cartoon'
-        });
-      } catch (err) {
-        viewerErr.textContent = '3D viewer failed to initialize.';
-        console.error(err);
-        return;
-      }
-
-      // ---- RIGHT: ProtVista (custom-data from your FASTA) ----
+      // RIGHT: Nightingale sequence setup
       const seq = fastaToSeq(fastaText);
       if (!seq) {
-        pvNote.style.display = 'block';
-        pvNote.textContent = 'No sequence found in FASTA; the interactive panel is hidden.';
-        pvEl.viewerdata = { displayNavigation: true, displaySequence: false, sequence:'', length: 0, tracks: [] };
+        seqNote.style.display = 'block';
+        seqNote.textContent = 'No sequence found in FASTA.';
         return;
       }
 
-      // Try to infer a chain ID; fall back to default.
-      let chainIdGuess = CHAIN_ID_DEFAULT;
-      try {
-        const plugin = viewer?.viewerInstance?.plugin;
-        const structures = plugin?.managers?.structure?.hierarchy?.current?.structures || [];
-        const first = structures[0];
-        const ah = first?.cell?.obj?.data?.model?.atomicHierarchy;
-        const chains = ah?.chains;
-        const label_asym_id = chains?.label_asym_id?.toArray?.();
-        if (label_asym_id && label_asym_id.length) chainIdGuess = label_asym_id[0];
-      } catch (e) {
-        console.warn('Could not infer chainId from Mol*; using default', CHAIN_ID_DEFAULT);
-      }
+      // Configure the sequence component
+      // Nightingale auto-renders when properties change.
+      ng.sequence     = seq;               // full sequence (letters)
+      ng.length       = seq.length;        // total residues
+      ng.displayStart = 1;                 // show entire sequence by default
+      ng.displayEnd   = seq.length;
 
-      // Provide ProtVista with sequence; add feature tracks later if you like.
-      pvEl.viewerdata = {
-        displayNavigation: true,
-        displaySequence: true,
-        sequence: seq,
-        length: seq.length,
-        offset: 1,
-        tracks: []
-      };
-
-      // --- Sequence selection -> 3D highlight ---
-      function selectRangeIn3D(start, end) {
-        start = Math.max(1, Math.min(seq.length, start|0));
-        end   = Math.max(1, Math.min(seq.length, end|0));
-        if (end < start) [start, end] = [end, start];
-
-        const data = [];
-        for (let r = start; r <= end; r++) data.push({ chainId: chainIdGuess, residueNumber: r });
-
-        try {
-          if (data.length) {
-            viewer.visual?.select?.({ data, nonSelectedOpacity: 0.25, focus: false });
-          } else {
-            viewer.visual?.clearSelection?.();
-          }
-        } catch (e) {
-          console.warn('Mol* selection failed:', e);
-        }
-      }
-
-      // ProtVista emits custom events; listen for a couple of common ones.
-      document.addEventListener('protvista-selection', (e) => {
-        const { start, end } = e.detail || {};
-        if (start && end) selectRangeIn3D(start, end);
+      // Optional: respond to clicks (you’ll see positions in the console)
+      // Different versions may emit 'click' or 'positionChange' with detail { position }
+      ng.addEventListener('click', (e) => {
+        const pos = e.detail?.position ?? e.target?.position;
+        if (pos) console.log('Clicked residue', pos);
       });
-      document.addEventListener('protvista-click', (e) => {
-        const { start, end } = e.detail || {};
-        if (start && end) selectRangeIn3D(start, end);
+      ng.addEventListener('positionChange', (e) => {
+        const pos = e.detail?.position;
+        if (pos) console.log('Position changed to', pos);
       });
-
-      // (Optional) 3D -> sequence sync can be added once you decide how to visualize ranges in ProtVista.
     }
 
     load();
