@@ -4,21 +4,17 @@
   <meta charset="utf-8" />
   <title>Entry</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- PDBe Mol* (minimal UI) -->
-  <script src="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar-plugin.js"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pdbe-molstar@latest/build/pdbe-molstar.css"/>
-
   <style>
-    :root { --panel-pad: 12px; }
-    body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
+    :root { --pad: 12px; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     a { text-decoration: none; }
 
-    .bar { padding: 10px var(--panel-pad); }
+    .bar { padding: 10px var(--pad); }
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
       gap: 16px;
-      padding: 0 var(--panel-pad) 16px;
+      padding: 0 var(--pad) 16px;
     }
     .card {
       border: 1px solid #ddd;
@@ -37,45 +33,37 @@
       font-size: 15px;
     }
 
-    /* Left: viewer */
-    #viewer-container { position: relative; height: 640px; }
-    #molstar-host { position: absolute; inset: 0; }
+    /* Left viewer box */
+    #viewer-wrap { position: relative; height: 640px; }
+    #viewer-frame { position:absolute; inset:0; width:100%; height:100%; border:0; display:block; }
 
-    /* Right: sequence */
-    #seq-panel { display: flex; flex-direction: column; height: 640px; }
+    /* Right sequence panel */
+    #seq-panel { display:flex; flex-direction:column; height:640px; }
     #seq-toolbar {
-      display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid #eee; background: #fafafa;
+      display:flex; align-items:center; gap:8px;
+      padding:8px 12px; border-bottom:1px solid #eee; background:#fafafa;
     }
+    .btn { padding:6px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; background:#fff; }
+    .btn:disabled { opacity:.6; cursor:not-allowed; }
+
+    /* Sequence box (static) */
     #seq-box {
       padding: 12px;
       overflow: auto;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      line-height: 1.65;
       font-size: 13px;
+      line-height: 1.65;
       white-space: pre-wrap;
       word-break: break-word;
-      flex: 1;
       background: #fff;
-    }
-    .res {
-      display: inline-block;
-      padding: 1px 2px;
-      border-radius: 3px;
-      cursor: pointer;
-      transition: background-color 120ms ease, color 120ms ease, box-shadow 120ms ease;
-      user-select: none;
-    }
-    .res:hover { background: #eaf2ff; }
-    .res.sel { background: #2563eb; color: #fff; }
-    .res.focus { outline: 1px solid #111; }
-    .pos {
-      color: #999; font-size: 11px; margin: 0 6px;
+      flex: 1;
     }
 
-    .meta { display:flex; gap:12px; align-items:center; margin: 6px var(--panel-pad) 16px; }
-    .btn { padding: 6px 10px; border:1px solid #ddd; border-radius:6px; cursor:pointer; background:#fff; }
-    .btn:disabled { opacity:.6; cursor:not-allowed; }
-    .error { color:#b00020; margin: 8px var(--panel-pad) 0; }
+    /* Optional soft line-number “ruler” every 10 residues (CSS-only visual aid) */
+    .chunk-10 { color:#6b7280; }  /* muted gray for separators */
+
+    .links { display:flex; gap:12px; align-items:center; margin: 6px var(--pad) 16px; }
+    .error { color:#b00020; margin: 8px var(--pad) 0; }
   </style>
 </head>
 <body>
@@ -83,222 +71,106 @@
   <div class="bar"><h1 id="title" style="margin:0"></h1></div>
 
   <div class="grid">
-    <!-- Left: Mol* -->
+    <!-- Left: Mol* (hosted, minimal) -->
     <div class="card">
       <h3>Structure</h3>
-      <div id="viewer-container">
-        <div id="molstar-host"></div>
+      <div id="viewer-wrap">
+        <iframe id="viewer-frame" src="about:blank" title="Mol* Viewer (minimal)"></iframe>
       </div>
     </div>
 
-    <!-- Right: sequence -->
+    <!-- Right: FASTA (static) -->
     <div class="card">
       <h3>Sequence</h3>
       <div id="seq-panel">
         <div id="seq-toolbar">
-          <button id="clearSel" class="btn" type="button">Clear selection</button>
-          <button id="copyFasta" class="btn" type="button">Copy FASTA</button>
-          <span id="hoverPos" class="pos"></span>
+          <button id="copyBtn" class="btn" type="button">Copy FASTA</button>
         </div>
-        <div id="seq-box" aria-label="Protein sequence"></div>
+        <pre id="seq-box">Loading…</pre>
       </div>
     </div>
   </div>
 
-  <div class="meta">
+  <div class="links">
     <strong>Files:</strong>
-    <a id="cifLink" target="_blank" rel="noopener">CIF</a>
+    <a id="cifLink"   target="_blank" rel="noopener">CIF</a>
     <a id="fastaLink" target="_blank" rel="noopener">FASTA</a>
   </div>
 
   <div id="err" class="error"></div>
 
   <script>
-  // --- helpers ---
-  const qs = sel => document.querySelector(sel);
-  const getParam = name => new URL(location.href).searchParams.get(name);
-  const chunk = (str, n=10) => str.match(new RegExp(`.{1,${n}}`, 'g')) || [];
+    const getParam = name => new URL(location.href).searchParams.get(name);
 
-  // --- main ---
-  (async function run(){
-    const uid = getParam('uid');
-    const errEl = qs('#err');
-    const titleEl = qs('#title');
-    const cifLink = qs('#cifLink');
-    const fastaLink = qs('#fastaLink');
-    const seqBox = qs('#seq-box');
-    const copyBtn = qs('#copyFasta');
-    const clearBtn = qs('#clearSel');
-    const hoverPos = qs('#hoverPos');
-
-    titleEl.textContent = uid || '(missing uid)';
-
-    // load catalog
-    let catalog;
-    try {
-      catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r => r.json());
-    } catch (e) {
-      errEl.textContent = 'Could not load entries.json';
-      return;
-    }
-    const entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
-    if (!entry) { errEl.textContent = 'Entry not found in catalog.'; return; }
-
-    const cifUrl = entry.files.structure_cif;
-    const fastaUrl = entry.files.sequence_fasta;
-    cifLink.href = cifUrl; fastaLink.href = fastaUrl;
-
-    // Fetch FASTA text (strip header to a single sequence)
-    let fastaText = '';
-    let seq = '';
-    try {
-      fastaText = await fetch(fastaUrl).then(r => r.text());
-      const lines = fastaText.split(/\r?\n/);
-      seq = lines.filter(l => !l.startsWith('>')).join('').trim();
-    } catch (e) {
-      errEl.textContent = 'Could not fetch FASTA.';
-      return;
-    }
-
-    // --- render Mol* (PDBe plugin, minimal UI) ---
-    const viewer = new PDBeMolstarPlugin();
-    viewer.render('molstar-host', {
-      customData: { url: cifUrl, format: 'cif' },
-      hideControls: true, // minimal UI
-      bgColor: { r: 255, g: 255, b: 255 },
-      // nice soft lighting + outline
-      lighting: 'soft',
-      outline: true,
-      // start with cartoon, uniform color
-      alphafoldView: false,
-      hideCanvasControls: true
-    });
-
-    // a tiny wait ensures the structure is mounted before first selection
-    await new Promise(res => setTimeout(res, 350));
-
-    // --- render interactive sequence on the right ---
-    // We map positions 1..N to clickable spans. We’ll select by label_seq_id.
-    const frag = document.createDocumentFragment();
-    const blockSize = 10; // put a space every 10 residues
-    let selSet = new Set(); // currently selected positions
-
-    function spanFor(i, aa) {
-      const sp = document.createElement('span');
-      sp.className = 'res';
-      sp.dataset.pos = String(i); // 1-based
-      sp.textContent = aa;
-      sp.title = `Residue ${i}`;
-      sp.addEventListener('mouseenter', () => {
-        hoverPos.textContent = `hover: ${i}`;
-        // transient highlight of a single residue
-        highlightRange(i, i, true);
-      });
-      sp.addEventListener('mouseleave', () => {
-        hoverPos.textContent = '';
-        // revert transient highlight, keep persistent selections
-        if (selSet.size) applyPersistentSelection();
-        else clearSelectionInViewer();
-      });
-      sp.addEventListener('click', (ev) => {
-        if (ev.shiftKey && selSet.size) {
-          // shift-click: extend from nearest selected residue
-          const last = [...selSet].sort((a,b)=>a-b).pop();
-          const from = Math.min(last, i), to = Math.max(last, i);
-          for (let k = from; k <= to; k++) selSet.add(k);
-        } else if (ev.metaKey || ev.ctrlKey) {
-          // toggle
-          if (selSet.has(i)) selSet.delete(i); else selSet.add(i);
-        } else {
-          // single selection
-          selSet = new Set([i]);
-        }
-        paintSequenceSelection();
-        applyPersistentSelection();
-      });
-      return sp;
-    }
-
-    // lay out sequence text with blocks of 10, groups of 50 per line
-    let i = 0;
-    const line = document.createElement('div');
-    line.style.marginBottom = '6px';
-
-    for (const aa of seq) {
-      i++;
-      line.appendChild(spanFor(i, aa));
-      if (i % blockSize === 0) line.appendChild(document.createTextNode(' '));
-      if (i % 50 === 0) {
-        frag.appendChild(line.cloneNode(true));
-        line.textContent = '';
+    // split sequence into blocks of 10 and 50 for easier reading (purely visual)
+    function formatSequence(seq) {
+      const out = [];
+      for (let i = 0; i < seq.length; i++) {
+        out.push(seq[i]);
+        const at = i + 1;
+        if (at % 10 === 0) out.push('<span class="chunk-10"> </span>');
+        if (at % 50 === 0) out.push('\n');
       }
-    }
-    if (line.childNodes.length) frag.appendChild(line);
-    seqBox.innerHTML = '';
-    seqBox.appendChild(frag);
-
-    // buttons
-    copyBtn.onclick = async () => {
-      await navigator.clipboard.writeText(fastaText);
-      copyBtn.textContent = 'Copied!';
-      setTimeout(()=> copyBtn.textContent = 'Copy FASTA', 1200);
-    };
-    clearBtn.onclick = () => {
-      selSet.clear();
-      paintSequenceSelection();
-      clearSelectionInViewer();
-    };
-
-    function paintSequenceSelection() {
-      seqBox.querySelectorAll('.res').forEach(el => {
-        const pos = +el.dataset.pos;
-        el.classList.toggle('sel', selSet.has(pos));
-      });
+      return out.join('').replace(/\n+$/,'');
     }
 
-    // --- viewer selection helpers (via PDBe Mol* “select” API) ---
-    // We select by label_seq_id ranges; chain is unspecified so it applies to any chain
-    function selectRanges(ranges, color = {r:37,g:99,b:235}) {
-      // PDBe plugin selection schema (flexible):
-      // data: array of { start_residue_number, end_residue_number, label_seq_id: true }
-      // When chain is unknown, omit asym_id/entity_id => it will match by label_seq_id across polymers.
-      const data = ranges.map(([a,b]) => ({
-        start_residue_number: a,
-        end_residue_number: b,
-        // hint to treat numbers as label_seq_id; some builds auto-detect, but this helps
-        label_seq_id: true
-      }));
-      viewer.visual.select({
-        data,
-        color, // selection color
-        focus: true, // zoom to selection if single/short
-        nonSelectedColor: { r: 220, g: 220, b: 220 }
-      });
-    }
+    async function load() {
+      const uid       = getParam('uid');
+      const errEl     = document.getElementById('err');
+      const titleEl   = document.getElementById('title');
+      const seqBox    = document.getElementById('seq-box');
+      const cifLink   = document.getElementById('cifLink');
+      const fastaLink = document.getElementById('fastaLink');
+      const frame     = document.getElementById('viewer-frame');
+      const copyBtn   = document.getElementById('copyBtn');
 
-    function clearSelectionInViewer() {
-      viewer.visual.clearSelection();
-    }
+      titleEl.textContent = uid || '(missing uid)';
 
-    function highlightRange(a, b, transient=false) {
-      // transient highlight uses same call; we simply don’t change persistent selSet
-      selectRanges([[a,b]], { r: 0, g: 0, b: 0 });
-    }
-
-    function applyPersistentSelection() {
-      if (!selSet.size) { clearSelectionInViewer(); return; }
-      // coalesce adjacent residues to ranges
-      const arr = [...selSet].sort((a,b)=>a-b);
-      const ranges = [];
-      let s = arr[0], prev = arr[0];
-      for (let k = 1; k < arr.length; k++) {
-        if (arr[k] === prev + 1) { prev = arr[k]; continue; }
-        ranges.push([s, prev]); s = prev = arr[k];
+      // Load catalog with cache-buster
+      let catalog;
+      try {
+        catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r => r.json());
+      } catch (e) {
+        errEl.textContent = 'Could not load entries.json.'; return;
       }
-      ranges.push([s, prev]);
-      selectRanges(ranges);
+
+      const entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
+      if (!entry) { errEl.textContent = 'Entry not found in catalog.'; return; }
+
+      // Wire file links
+      const cifUrl   = entry.files.structure_cif;
+      const fastaUrl = entry.files.sequence_fasta;
+      cifLink.href   = cifUrl;
+      fastaLink.href = fastaUrl;
+
+      // Show FASTA text (static) + copy
+      let fastaText = '';
+      try {
+        fastaText = await fetch(fastaUrl, { cache: 'no-store' }).then(r => r.text());
+        const seqOnly = fastaText.split(/\r?\n/).filter(l => !l.startsWith('>')).join('').trim();
+        seqBox.innerHTML = formatSequence(seqOnly) || '(no sequence)';
+        copyBtn.onclick = async () => {
+          await navigator.clipboard.writeText(fastaText);
+          copyBtn.textContent = 'Copied!';
+          setTimeout(() => copyBtn.textContent = 'Copy FASTA', 1200);
+        };
+      } catch {
+        seqBox.textContent = 'FASTA not available.';
+        copyBtn.disabled = true;
+      }
+
+      // Build hosted Mol* URL in minimal mode.
+      // Keep params conservative to avoid falling back to the full app UI.
+      const encoded = encodeURIComponent(cifUrl);
+      const viewerUrl =
+        `https://molstar.org/viewer/?structure-url=${encoded}` +
+        `&structure-url-format=mmcif` +
+        `&hide-controls=1`;
+
+      frame.src = viewerUrl;
     }
-  })();
+
+    load();
   </script>
 </body>
 </html>
