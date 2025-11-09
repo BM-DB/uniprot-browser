@@ -403,13 +403,39 @@
       }
     }
 
-    // --- UniProt (ONLY) protein name: recommended name
-    async function fetchUniProtRecommendedName(uid) {
+    // --- UniProt (ONLY) protein name:
+    // Prefer recommendedName; otherwise fall back to the first available alternative/submission/short name.
+    async function fetchUniProtBestName(uid) {
       try {
         const res = await fetch(`https://rest.uniprot.org/uniprotkb/${encodeURIComponent(uid)}.json`, { cache: 'no-store' });
         if (!res.ok) return null;
         const data = await res.json();
-        return data?.proteinDescription?.recommendedName?.fullName?.value || null;
+        const pd = data?.proteinDescription;
+
+        const rec = pd?.recommendedName?.fullName?.value;
+        if (rec) return rec;
+
+        const altArr = pd?.alternativeNames;
+        if (Array.isArray(altArr) && altArr.length) {
+          const altFull = altArr[0]?.fullName?.value;
+          if (altFull) return altFull;
+          const altShort = altArr[0]?.shortName?.[0]?.value;
+          if (altShort) return altShort;
+        }
+
+        const subArr = pd?.submissionNames;
+        if (Array.isArray(subArr) && subArr.length) {
+          const subFull = subArr[0]?.fullName?.value;
+          if (subFull) return subFull;
+          const subShort = subArr[0]?.shortName?.[0]?.value;
+          if (subShort) return subShort;
+        }
+
+        // Fallback: any shortName on the recommended block
+        const recShort = pd?.recommendedName?.shortName?.[0]?.value;
+        if (recShort) return recShort;
+
+        return null;
       } catch {
         return null;
       }
@@ -432,10 +458,10 @@
       titleIdEl.textContent = uid || '(missing uid)';
       titleNameEl.textContent = ''; // fill from UniProt only
 
-      // Fetch protein name from UniProt ONLY
+      // Fetch best-available protein name from UniProt ONLY
       if (uid) {
-        const recName = await fetchUniProtRecommendedName(uid);
-        if (recName) titleNameEl.textContent = `— ${recName}`;
+        const bestName = await fetchUniProtBestName(uid);
+        if (bestName) titleNameEl.textContent = `— ${bestName}`;
       }
 
       // Dropdown wiring
