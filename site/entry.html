@@ -20,7 +20,7 @@
 
     /* 2-column layout */
     .main {
-      height: calc(100vh - 54px); /* header height allowance */
+      height: calc(100vh - 54px);
       display: flex;
       gap: var(--gap);
       padding: var(--gap);
@@ -28,7 +28,7 @@
     }
     .col {
       flex: 1 1 50%;
-      min-width: 0; /* allow content to shrink */
+      min-width: 0;
       display: flex;
       flex-direction: column;
       border: 1px solid var(--card-border);
@@ -40,7 +40,6 @@
     /* Left: Mol* viewer fills column */
     #viewer-wrap { position: relative; flex: 1 1 auto; }
     #viewer { position: absolute; inset: 0; }
-    /* Ensure the canvas always fills */
     #viewer .msp-viewport, #viewer canvas {
       width: 100% !important;
       height: 100% !important;
@@ -61,19 +60,12 @@
     .seq-header {
       display: flex; align-items: center; gap: 12px;
       padding: 10px 12px; border-bottom: 1px solid var(--card-border);
-      background: #fafafa;
-      flex-wrap: wrap;
+      background: #fafafa; flex-wrap: wrap;
     }
     .seq-header strong { margin-right: 4px; }
     .seq-header a { text-decoration: none; }
-    .btn {
-      padding: 6px 10px; border: 1px solid var(--card-border); border-radius: 6px; cursor: pointer; background: #fff;
-    }
-    .seq-body {
-      flex: 1 1 auto;
-      overflow: auto;
-      padding: 12px;
-    }
+    .btn { padding: 6px 10px; border: 1px solid var(--card-border); border-radius: 6px; cursor: pointer; background: #fff; }
+    .seq-body { flex: 1 1 auto; overflow: auto; padding: 12px; }
     pre { margin: 0; white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
     /* Error banner */
@@ -84,8 +76,7 @@
     .seq-chain { margin-bottom: 10px; }
     .seq-chain h4 { margin: 8px 0 6px; font: 600 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     .seq-res {
-      display: inline-block; padding: 2px 3px; margin: 0 1px 1px 0; border-radius: 3px; cursor: pointer;
-      user-select: none;
+      display: inline-block; padding: 2px 3px; margin: 0 1px 1px 0; border-radius: 3px; cursor: pointer; user-select: none;
     }
     .seq-res:hover { background:#eef6ff; }
     .seq-res.active { background:#cfe8ff; outline: 1px solid #8bbcff; }
@@ -142,7 +133,6 @@
       try {
         catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r=>r.json());
       } catch (e) {
-        // Show errors on both sides
         viewerErr.style.display = 'block';
         seqErr.style.display = 'block';
         viewerErr.textContent = 'Could not load entries.json.';
@@ -213,7 +203,7 @@
         return;
       }
 
-      // Defensive: if PDBe injects controls later, hide again
+      // Defensive: keep UI chrome hidden
       const root = document.getElementById('viewer');
       const hideChrome = () => {
         [
@@ -229,7 +219,7 @@
       hideChrome(); setTimeout(hideChrome, 100); setTimeout(hideChrome, 500);
       new MutationObserver(hideChrome).observe(root, { childList:true, subtree:true });
 
-      // Optional: soft lighting + outline + uniform color
+      // Soft lighting + outline + uniform tint
       function styleScene() {
         try {
           const plugin = viewer?.viewerInstance?.plugin;
@@ -250,9 +240,8 @@
       setTimeout(styleScene, 400);
       setTimeout(styleScene, 1200);
 
-      // ---- NEW: Build interactive sequence from the LOADED structure ----
-      // Wait until the structure is actually present (guard for different plugin timings)
-      async function waitForStructure(timeoutMs=4000) {
+      // ---- Build interactive sequence from the LOADED structure ----
+      async function waitForStructure(timeoutMs=5000) {
         const start = performance.now();
         const plugin = viewer?.viewerInstance?.plugin;
         while (performance.now() - start < timeoutMs) {
@@ -260,35 +249,22 @@
           const sRef = hier?.structures?.[0];
           const structure = sRef?.cell?.obj?.data?.structure;
           const model = structure?.models?.[0];
-          if (model?.atomicHierarchy) return { plugin, structure, model };
+          if (model?.atomicHierarchy) return { structure, model };
           await new Promise(r => setTimeout(r, 100));
         }
         return null;
       }
 
       function buildSeqStrip(model) {
-        const residues = model.atomicHierarchy.residues;
-        const chains   = model.atomicHierarchy.chains;
+        const { residues, chains } = model.atomicHierarchy;
         if (!residues || !chains) return null;
 
-        const labelCompId = residues.label_comp_id;   // 3-letter residue code
-        const authSeqId   = residues.auth_seq_id;     // residue number (auth)
-        const residueToChain = residues.chainIndex;   // index into chains
-        const asymIdArr   = chains.label_asym_id;     // struct_asym_id
+        const label_comp_id = residues.label_comp_id;   // Column<string>
+        const auth_seq_id   = residues.auth_seq_id;     // Column<number>
+        const chainIndex    = residues.chainIndex;      // Int32Array
+        const label_asym_id = chains.label_asym_id;     // Column<string>
 
-        if (!labelCompId || !authSeqId || !residueToChain || !asymIdArr) return null;
-
-        const byChain = new Map(); // asymId -> [{comp, auth, asym}]
-        const nResidues = residues._rowCount | 0;
-
-        for (let rI = 0; rI < nResidues; rI++) {
-          const cIdx = residueToChain[rI];
-          const asym = asymIdArr[cIdx];
-          const comp = labelCompId[rI];
-          const auth = authSeqId[rI];
-          if (!byChain.has(asym)) byChain.set(asym, []);
-          byChain.get(asym).push({ comp, auth, asym });
-        }
+        if (!label_comp_id || !auth_seq_id || !chainIndex || !label_asym_id) return null;
 
         const to1 = (aa3) => {
           const m = {
@@ -301,19 +277,35 @@
           return m[aa3?.toUpperCase()] || 'X';
         };
 
+        // Group residues by chain (label_asym_id)
+        const byChain = new Map(); // asym -> array of {one, three, auth}
+        const nResidues = residues._rowCount | 0;
+
+        for (let rI = 0; rI < nResidues; rI++) {
+          const cIdx = chainIndex[rI];
+          const asym = label_asym_id.value(cIdx);
+          const comp3 = label_comp_id.value(rI);
+          const auth  = auth_seq_id.value(rI);
+          const one   = to1(comp3);
+
+          if (!byChain.has(asym)) byChain.set(asym, []);
+          byChain.get(asym).push({ one, three: comp3, auth, asym });
+        }
+
         const container = document.createElement('div');
         container.className = 'seq-strip';
 
+        // Helpers to talk to PDBe visual API
         const highlightOne = (asym, auth) => {
           try {
-            viewer.visual.highlight([{ struct_asym_id: asym, start_residue_number: auth, end_residue_number: auth }]);
+            viewer.visual.highlight({ data: [{ struct_asym_id: asym, start_residue_number: auth, end_residue_number: auth }] });
           } catch {}
         };
         const clearHighlight = () => { try { viewer.visual.clearHighlight(); } catch {} };
         const selectOne = (asym, auth) => {
           try {
-            viewer.visual.clearSelection();
-            viewer.visual.select([{ struct_asym_id: asym, start_residue_number: auth, end_residue_number: auth }]);
+            viewer.visual.clearSelection?.();
+            viewer.visual.select({ data: [{ struct_asym_id: asym, start_residue_number: auth, end_residue_number: auth }] });
           } catch {}
         };
 
@@ -328,8 +320,8 @@
           list.forEach(res => {
             const sp = document.createElement('span');
             sp.className = 'seq-res';
-            sp.textContent = to1(res.comp);
-            sp.title = `${res.comp} ${res.auth}`;
+            sp.textContent = res.one;
+            sp.title = `${res.three} ${res.auth}`;
             sp.dataset.asym = res.asym;
             sp.dataset.auth = String(res.auth);
 
@@ -360,17 +352,17 @@
       if (loaded && loaded.model?.atomicHierarchy) {
         const strip = buildSeqStrip(loaded.model);
         if (strip) {
-          // Replace FASTA pane with interactive strip, keep FASTA available as a collapsed block below if you want:
+          // Replace FASTA area with interactive strip
           seqBody.innerHTML = '';
           seqBody.appendChild(strip);
-          // (Optional) keep a small toggle to show FASTA:
+          // Optional: keep FASTA in a collapsible block
           // const details = document.createElement('details');
           // details.innerHTML = '<summary>Show FASTA</summary>';
           // const pre = document.createElement('pre'); pre.textContent = fastaText;
           // details.appendChild(pre); seqBody.appendChild(details);
         }
-        // If strip is null, we silently keep the FASTA fallback already shown.
-      } // else: keep FASTA fallback
+      }
+      // else: keep the FASTA fallback already shown
     }
 
     load();
