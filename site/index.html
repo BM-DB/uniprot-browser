@@ -12,7 +12,7 @@
       --card-bg:#fff;
       --sitebar-h:70px;
       --accent:#2563eb;
-      --placeholder:#7a7a7a; /* keep icon and placeholder perfectly in sync */
+      --placeholder:#7a7a7a; /* icon + placeholder synchronized */
     }
     html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#222;}
 
@@ -29,30 +29,23 @@
       overflow-y:auto;display:flex;flex-direction:column;gap:16px;
     }
 
-    /* Search input with right-aligned icon (grid overlay = bulletproof) */
+    /* Search input with right-locked icon (absolute inside relative wrapper) */
     .search-wrap{
-      display:grid; /* overlays children in the same grid cell */
-      grid-template-columns: 1fr;
-      align-items:center;
-      max-width:520px;width:100%;
+      position:relative;max-width:520px;width:100%;
     }
     #search{
-      grid-area: 1 / 1;
-      width:100%;
-      padding:10px 40px 10px 12px; /* extra right padding for the icon */
+      display:block;width:100%;
+      padding:10px 40px 10px 12px; /* right padding ≥ icon width + gap */
       border:1px solid var(--card-border);
       border-radius:8px;font-size:15px;background:#fff;
       box-shadow:0 1px 2px rgba(0,0,0,.04);
     }
-    #search::placeholder{ color:var(--placeholder); opacity:1; } /* Safari needs opacity */
+    #search::placeholder{ color:var(--placeholder); opacity:1; }
 
     .search-icon{
-      grid-area: 1 / 1; /* sits on top of the input in the same cell */
-      justify-self:end; /* lock to the right edge */
-      margin-right:1px; /* 1px from right edge, aligned with input padding */
-      width:18px;height:18px;
-      color:var(--placeholder); /* match placeholder */
-      pointer-events:none; /* decorative, not interactive */
+      position:absolute;right:12px;top:50%;transform:translateY(-50%);
+      width:18px;height:18px;color:var(--placeholder);
+      pointer-events:none; /* purely decorative */
     }
 
     #results{display:flex;flex-direction:column;gap:12px;}
@@ -112,7 +105,7 @@
   <div class="main">
     <div class="search-wrap">
       <input id="search" placeholder="Search by UniProt ID or protein name…" aria-label="Search entries" />
-      <!-- Decorative magnifying glass icon (fills with currentColor -> matches placeholder) -->
+      <!-- Decorative magnifying glass icon (uses currentColor -> matches placeholder) -->
       <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
         <path fill="currentColor" d="M10.5 3a7.5 7.5 0 0 1 5.89 12.23l4.19 4.18a1 1 0 1 1-1.42 1.42l-4.18-4.19A7.5 7.5 0 1 1 10.5 3zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11z"/>
       </svg>
@@ -166,7 +159,6 @@
         // Find header indices
         const header = rows[0]?.map(h => h.trim().toLowerCase()) || [];
         const idIdx = header.indexOf("uniprot id");
-        theNameIdx = header.indexOf("protein name");
         const nameIdx = header.indexOf("protein name");
         if (idIdx === -1 || nameIdx === -1) {
           console.warn("protein_names.csv missing expected headers.");
