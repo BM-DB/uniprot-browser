@@ -12,6 +12,7 @@
       --card-bg:#fff;
       --sitebar-h:70px;
       --accent:#2563eb;
+      --placeholder:#7a7a7a; /* keep icon and placeholder perfectly in sync */
     }
     html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#222;}
 
@@ -28,18 +29,30 @@
       overflow-y:auto;display:flex;flex-direction:column;gap:16px;
     }
 
-    /* Search input with right-aligned icon */
+    /* Search input with right-aligned icon (grid overlay = bulletproof) */
     .search-wrap{
-      position:relative;max-width:520px;width:100%;
+      display:grid; /* overlays children in the same grid cell */
+      grid-template-columns: 1fr;
+      align-items:center;
+      max-width:520px;width:100%;
     }
     #search{
-      width:100%;padding:10px 40px 10px 12px;border:1px solid var(--card-border);
+      grid-area: 1 / 1;
+      width:100%;
+      padding:10px 40px 10px 12px; /* extra right padding for the icon */
+      border:1px solid var(--card-border);
       border-radius:8px;font-size:15px;background:#fff;
       box-shadow:0 1px 2px rgba(0,0,0,.04);
     }
+    #search::placeholder{ color:var(--placeholder); opacity:1; } /* Safari needs opacity */
+
     .search-icon{
-      position:absolute;right:10px;top:50%;transform:translateY(-50%);
-      width:18px;height:18px;color:#7a7a7a;opacity:.85;pointer-events:none; /* decorative */
+      grid-area: 1 / 1; /* sits on top of the input in the same cell */
+      justify-self:end; /* lock to the right edge */
+      margin-right:10px; /* 10px from right edge, aligned with input padding */
+      width:18px;height:18px;
+      color:var(--placeholder); /* match placeholder */
+      pointer-events:none; /* decorative, not interactive */
     }
 
     #results{display:flex;flex-direction:column;gap:12px;}
@@ -99,9 +112,9 @@
   <div class="main">
     <div class="search-wrap">
       <input id="search" placeholder="Search by UniProt ID or protein name…" aria-label="Search entries" />
-      <!-- Decorative magnifying glass icon (not a button) -->
+      <!-- Decorative magnifying glass icon (fills with currentColor -> matches placeholder) -->
       <svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true">
-        <path d="M10.5 3a7.5 7.5 0 0 1 5.89 12.23l4.19 4.18a1 1 0 1 1-1.42 1.42l-4.18-4.19A7.5 7.5 0 1 1 10.5 3zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11z"/>
+        <path fill="currentColor" d="M10.5 3a7.5 7.5 0 0 1 5.89 12.23l4.19 4.18a1 1 0 1 1-1.42 1.42l-4.18-4.19A7.5 7.5 0 1 1 10.5 3zm0 2a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11z"/>
       </svg>
     </div>
 
@@ -111,7 +124,6 @@
 
   <script>
     // ---- CONFIG: protein names CSV (UniProt ID, Protein Name) ----
-    // Keep this pointing at your uniprot-data repo's raw CSV:
     const PROTEIN_NAMES_URL =
       "https://raw.githubusercontent.com/BM-DB/uniprot-data/refs/heads/main/Protein-Metadata/protein_names.csv";
 
@@ -139,7 +151,6 @@
           field += c; i++;
         }
       }
-      // last field
       row.push(field);
       if (row.length > 1 || row[0] !== '') rows.push(row);
       return rows;
@@ -155,6 +166,7 @@
         // Find header indices
         const header = rows[0]?.map(h => h.trim().toLowerCase()) || [];
         const idIdx = header.indexOf("uniprot id");
+        theNameIdx = header.indexOf("protein name");
         const nameIdx = header.indexOf("protein name");
         if (idIdx === -1 || nameIdx === -1) {
           console.warn("protein_names.csv missing expected headers.");
