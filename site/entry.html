@@ -16,7 +16,18 @@
       padding: 16px 24px; border-bottom: 1px solid var(--card-border);
       background: #fff; height: var(--sitebar-h); box-sizing: border-box;
     }
-    .site-title { font-size: 22px; font-weight: 600; margin: 0; }
+    /* Title + logo in header */
+    .site-title {
+      display:flex; align-items:center; gap:10px;
+      font-size:22px; font-weight:600; margin:0; line-height:1.2;
+    }
+    .site-title-text { white-space:nowrap; }
+    .site-logo {
+      height:2em;       /* match text height */
+      width:auto;       /* keep aspect ratio */
+      display:inline-block;
+      vertical-align:middle;
+    }
 
     .topbar {
       display: flex; align-items: center; gap: 12px; padding: 12px 16px;
@@ -70,7 +81,10 @@
 </head>
 <body>
   <div class="sitebar">
-    <h1 class="site-title">Computational Structure Database</h1>
+    <h1 class="site-title">
+      <span class="site-title-text">Computational Structure Database</span>
+      <img class="site-logo" src="YOUR_LOGO_URL_HERE" alt="Project logo" />
+    </h1>
   </div>
 
   <div class="topbar">
