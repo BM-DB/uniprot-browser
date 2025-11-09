@@ -85,6 +85,15 @@
       font-size: 15px;
       color: #111;
       word-break: break-word;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .entry-subtitle {
+      font-weight: 400;
+      color: #555;
+      font-size: 13px;
     }
 
     .entry-desc {
@@ -137,6 +146,30 @@
   </div>
 
   <script>
+    // --- UniProt name cache and fetcher (recommended name only)
+    const uniprotNameCache = new Map(); // uid -> string | null | Promise<string|null>
+    const UNIPROT_BASE = 'https://rest.uniprot.org/uniprotkb/';
+
+    async function fetchUniProtRecommendedName(uid) {
+      if (!uid) return null;
+      if (uniprotNameCache.has(uid)) {
+        const v = uniprotNameCache.get(uid);
+        return v instanceof Promise ? v : v;
+      }
+      const p = (async () => {
+        try {
+          const res = await fetch(UNIPROT_BASE + encodeURIComponent(uid) + '.json', { cache: 'no-store' });
+          if (!res.ok) return null;
+          const data = await res.json();
+          return data?.proteinDescription?.recommendedName?.fullName?.value || null;
+        } catch { return null; }
+      })();
+      uniprotNameCache.set(uid, p);
+      const resolved = await p;
+      uniprotNameCache.set(uid, resolved); // store final value
+      return resolved;
+    }
+
     async function loadCatalog() {
       const results = document.getElementById('results');
       try {
@@ -157,7 +190,11 @@
       }
     }
 
+    // Render token to avoid race when typing in search
+    let renderToken = 0;
+
     function render(entries) {
+      const token = ++renderToken;
       const results = document.getElementById('results');
       results.innerHTML = '';
 
@@ -175,7 +212,15 @@
 
         const title = document.createElement('div');
         title.className = 'entry-title';
-        title.textContent = entry.uniprot_id || '(no ID)';
+
+        const idSpan = document.createElement('span');
+        idSpan.textContent = entry.uniprot_id || '(no ID)';
+        title.appendChild(idSpan);
+
+        const nameSpan = document.createElement('span');
+        nameSpan.className = 'entry-subtitle';
+        // initially blank; will populate asynchronously
+        title.appendChild(nameSpan);
 
         const desc = document.createElement('div');
         desc.className = 'entry-desc';
@@ -195,6 +240,16 @@
         div.appendChild(info);
         div.appendChild(openBtn);
         results.appendChild(div);
+
+        // Fill the recommended name (non-blocking)
+        const uid = entry.uniprot_id;
+        if (uid) {
+          fetchUniProtRecommendedName(uid).then(name => {
+            // If another render happened since we started, skip updating old nodes
+            if (token !== renderToken) return;
+            if (name) nameSpan.textContent = `— ${name}`;
+          });
+        }
       });
     }
 
