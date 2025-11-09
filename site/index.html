@@ -1,14 +1,204 @@
 <!doctype html>
-<html>
+<html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>UniProt Browser</title>
+  <title>Computational Structure Database</title>
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    :root {
+      --gap: 12px;
+      --card-border: #ddd;
+      --bg: #f8f9fb;
+      --card-bg: #fff;
+    }
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: var(--bg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: #222;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--card-border);
+      background: #fff;
+    }
+
+    .title {
+      font-size: 22px;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .main {
+      padding: 24px;
+      box-sizing: border-box;
+      height: calc(100vh - 70px);
+      overflow-y: auto;
+    }
+
+    #search {
+      width: 100%;
+      max-width: 400px;
+      padding: 10px 12px;
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      font-size: 15px;
+      margin-bottom: 24px;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    #results {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .entry {
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      background: var(--card-bg);
+      padding: 14px 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: background 0.2s;
+    }
+    .entry:hover {
+      background: #f5f8ff;
+    }
+
+    .entry-info {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .entry-title {
+      font-weight: 600;
+      font-size: 15px;
+      color: #111;
+    }
+
+    .entry-desc {
+      color: #555;
+      font-size: 13px;
+    }
+
+    .btn {
+      padding: 7px 12px;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      cursor: pointer;
+      background: #fff;
+      font-size: 14px;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .btn:hover {
+      background: #eef4ff;
+      border-color: #8bbcff;
+    }
+
+    .empty {
+      font-size: 14px;
+      color: #666;
+      padding: 16px;
+      border: 1px dashed #ccc;
+      border-radius: 8px;
+      background: #fff;
+      max-width: 400px;
+    }
+  </style>
 </head>
 <body>
-  <h1>UniProt Browser</h1>
-  <input id="search" placeholder="Search UniProt ID..." />
-  <div id="results"></div>
-  <script src="app.js"></script>
+  <div class="topbar">
+    <h1 class="title">Computational Structure Database</h1>
+  </div>
+
+  <div class="main">
+    <input id="search" placeholder="Search UniProt ID..." />
+    <div id="results"></div>
+  </div>
+
+  <script>
+    async function loadCatalog() {
+      try {
+        const res = await fetch('data/entries.json?v=' + Date.now());
+        if (!res.ok) throw new Error('Could not load entries.json');
+        const data = await res.json();
+        return data.entries || [];
+      } catch (e) {
+        console.error(e);
+        const results = document.getElementById('results');
+        results.innerHTML = '<div class="empty">Error loading catalog.</div>';
+        return [];
+      }
+    }
+
+    function render(entries) {
+      const results = document.getElementById('results');
+      results.innerHTML = '';
+
+      if (!entries.length) {
+        results.innerHTML = '<div class="empty">No matching entries found.</div>';
+        return;
+      }
+
+      entries.forEach(entry => {
+        const div = document.createElement('div');
+        div.className = 'entry';
+
+        const info = document.createElement('div');
+        info.className = 'entry-info';
+
+        const title = document.createElement('div');
+        title.className = 'entry-title';
+        title.textContent = entry.uniprot_id || '(no ID)';
+
+        const desc = document.createElement('div');
+        desc.className = 'entry-desc';
+        desc.textContent = entry.description || '';
+
+        info.appendChild(title);
+        if (entry.description) info.appendChild(desc);
+
+        const openBtn = document.createElement('button');
+        openBtn.className = 'btn';
+        openBtn.textContent = 'Open';
+        openBtn.onclick = () => {
+          window.location.href = `entry.html?uid=${encodeURIComponent(entry.uniprot_id)}`;
+        };
+
+        div.appendChild(info);
+        div.appendChild(openBtn);
+        results.appendChild(div);
+      });
+    }
+
+    async function main() {
+      const entries = await loadCatalog();
+      const searchInput = document.getElementById('search');
+
+      function filterAndRender() {
+        const q = searchInput.value.trim().toLowerCase();
+        const filtered = !q
+          ? entries
+          : entries.filter(e => (e.uniprot_id || '').toLowerCase().includes(q));
+        render(filtered);
+      }
+
+      searchInput.addEventListener('input', filterAndRender);
+      render(entries);
+    }
+
+    main();
+  </script>
 </body>
 </html>
+
