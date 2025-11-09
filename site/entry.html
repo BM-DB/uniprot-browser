@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <title>Entry</title>
   <link rel="stylesheet" href="styles.css" />
-  <!-- PDBe Mol* -->
+  <!-- PDBe Mol* (pinned) -->
   <script src="https://unpkg.com/pdbe-molstar@3.7.1/build/pdbe-molstar-plugin.js"></script>
   <link rel="stylesheet" href="https://unpkg.com/pdbe-molstar@3.7.1/build/pdbe-molstar-light.css" />
 
@@ -17,14 +17,24 @@
     .topbar a { text-decoration: none; }
     .title { font-size: 20px; font-weight: 600; margin: 0; }
 
-    .main { height: calc(100vh - 54px); display: flex; gap: var(--gap); padding: var(--gap); box-sizing: border-box; }
-    .col { flex: 1 1 50%; min-width: 0; display: flex; flex-direction: column;
-           border: 1px solid var(--card-border); border-radius: 8px; overflow: hidden; background: #fff; }
+    .main {
+      height: calc(100vh - 54px);
+      display: flex; gap: var(--gap);
+      padding: var(--gap); box-sizing: border-box;
+    }
+    .col {
+      flex: 1 1 50%; min-width: 0;
+      display: flex; flex-direction: column;
+      border: 1px solid var(--card-border); border-radius: 8px;
+      overflow: hidden; background: #fff;
+    }
 
+    /* Left viewer */
     #viewer-wrap { position: relative; flex: 1 1 auto; }
     #viewer { position: absolute; inset: 0; }
     #viewer .msp-viewport, #viewer canvas {
-      width: 100% !important; height: 100% !important; max-width: 100% !important; max-height: 100% !important;
+      width: 100% !important; height: 100% !important;
+      max-width: 100% !important; max-height: 100% !important;
     }
     .msp-left-panel,.msp-right-panel,.msp-bottom-panel,
     .msp-layout-controls,.msp-viewport-controls,
@@ -32,6 +42,7 @@
       display: none !important; visibility: hidden !important; pointer-events: none !important;
     }
 
+    /* Right header with dropdown */
     .seq-header {
       display: flex; align-items: center; gap: 12px;
       padding: 10px 12px; border-bottom: 1px solid var(--card-border);
@@ -58,15 +69,21 @@
     .seq-body { flex: 1 1 auto; overflow: auto; padding: 12px; }
     .error { color: #b00020; padding: 8px 12px; border-top: 1px solid var(--card-border); background: #fff7f7; }
 
+    /* Interactive sequence strip */
     .seq-strip { font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; user-select: none; }
     .seq-chain { margin-bottom: 10px; }
     .seq-chain h4 { margin: 8px 0 6px; font: 600 13px/1.3 system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     .seq-row { display: flex; flex-wrap: wrap; align-items: center; }
-    .seq-res { display: inline-block; padding: 2px 3px; margin: 0 1px 1px 0; border-radius: 3px; cursor: pointer; }
+    .seq-res {
+      display: inline-block; padding: 2px 3px; margin: 0 1px 1px 0;
+      border-radius: 3px; cursor: pointer;
+    }
     .seq-res:hover { background:#eef6ff; }
     .seq-res.active { background:#cfe8ff; outline: 1px solid #8bbcff; }
     .seq-res.sel { background:#bad7ff; outline: 1px solid #7fb0ff; }
     .seq-res.drag { background:#dfeeff; outline: 1px dashed #9ac3ff; }
+
+    .muted { color:#666; font-size:12px; margin: 6px 0 0; }
   </style>
 </head>
 <body>
@@ -76,11 +93,15 @@
   </div>
 
   <div class="main">
+    <!-- Left: Mol* -->
     <div class="col">
-      <div id="viewer-wrap"><div id="viewer"></div></div>
+      <div id="viewer-wrap">
+        <div id="viewer"></div>
+      </div>
       <div id="viewer-error" class="error" style="display:none;"></div>
     </div>
 
+    <!-- Right: sequence + tools -->
     <div class="col">
       <div class="seq-header">
         <div class="dropdown" id="downloadDropdown">
@@ -92,6 +113,7 @@
         </div>
         <button id="copyBtn" class="btn" type="button">Copy Sequence</button>
       </div>
+
       <div class="seq-body" id="seq-body"></div>
       <div id="seq-error" class="error" style="display:none;"></div>
     </div>
@@ -100,286 +122,393 @@
   <script>
     function getParam(name){ return new URL(location.href).searchParams.get(name); }
 
-    // PDBe helpers
-    function pdbeHighlight(viewer, asym, auth){ try { viewer.visual.highlight({ data: [{ struct_asym_id: asym, start_residue_number: auth, end_residue_number: auth }] }); } catch {} }
-    function pdbeClearHighlight(viewer){ try { viewer.visual.clearHighlight(); } catch {} }
-    function pdbeSelectRanges(viewer, ranges){ try { viewer.visual.select({ data: ranges.map(r => ({ struct_asym_id: r.asym, start_residue_number: r.start, end_residue_number: r.end }))}); } catch {} }
-    function pdbeClearSelection(viewer){ try { viewer.visual.clearSelection?.(); } catch {} }
+    // --- PDBe visual helpers
+    function pdbeHighlight(viewer, asym, auth) {
+      try { viewer.visual.highlight({ data: [{ struct_asym_id: asym, start_residue_number: auth, end_residue_number: auth }] }); } catch {}
+    }
+    function pdbeClearHighlight(viewer) { try { viewer.visual.clearHighlight(); } catch {} }
+    function pdbeSelectRanges(viewer, ranges) {
+      try { viewer.visual.select({ data: ranges.map(r => ({ struct_asym_id: r.asym, start_residue_number: r.start, end_residue_number: r.end }))}); } catch {}
+    }
+    function pdbeClearSelection(viewer) { try { viewer.visual.clearSelection?.(); } catch {} }
 
-    // Drag-select
+    // ---- Drag-select controller
     function enableDragSelect(container, chainsMeta, viewer) {
-      const selected = new Map();
-      const normalize = (a,b)=>[Math.min(a,b),Math.max(a,b)];
-      const merge = (arr)=>{arr.sort((x,y)=>x[0]-y[0]);const out=[];for(const r of arr){if(!out.length||r[0]>out[out.length-1][1]+1)out.push(r);else out[out.length-1][1]=Math.max(out[out.length-1][1],r[1]);}return out;};
-      function addRangeIdx(asym,a,b){
-        const meta=chainsMeta.get(asym); if(!meta) return;
-        const [s,e]=normalize(a,b); const start=meta.items[s].auth, end=meta.items[e].auth;
-        const arr=selected.get(asym)||[]; arr.push([start,end]); selected.set(asym,merge(arr));
+      const selected = new Map(); // asym -> array of [start,end]
+
+      function normalizeRange(a,b){ return [Math.min(a,b), Math.max(a,b)]; }
+      function mergeRanges(arr){
+        arr.sort((x,y)=>x[0]-y[0]);
+        const out=[]; for(const r of arr){ if(!out.length||r[0]>out[out.length-1][1]+1) out.push(r); else out[out.length-1][1]=Math.max(out[out.length-1][1],r[1]); }
+        return out;
       }
-      function toggleSingleIdx(asym,idx){
-        const meta=chainsMeta.get(asym); if(!meta) return;
-        const auth=meta.items[idx].auth; let arr=selected.get(asym)||[];
-        let i=0,done=false;
-        for(;i<arr.length;i++){const [s,e]=arr[i]; if(auth>=s&&auth<=e){arr.splice(i,1); if(auth>s)arr.splice(i,0,[s,auth-1]),i++; if(auth<e)arr.splice(i,0,[auth+1,e]); done=true; break;}}
-        if(!done) arr.push([auth,auth]); selected.set(asym,merge(arr));
+      function addRangeIdx(asym, startIdx, endIdx){
+        const meta = chainsMeta.get(asym); if(!meta) return;
+        const [a,b]=normalizeRange(startIdx,endIdx);
+        const startAuth = meta.items[a].auth, endAuth = meta.items[b].auth;
+        const arr = selected.get(asym)||[]; arr.push([startAuth,endAuth]); selected.set(asym, mergeRanges(arr));
+      }
+      function toggleSingleIdx(asym, idx){
+        const meta = chainsMeta.get(asym); if(!meta) return;
+        const auth = meta.items[idx].auth;
+        let arr = selected.get(asym)||[];
+        let changed=false;
+        for (let i=0;i<arr.length;i++){
+          const [s,e]=arr[i];
+          if(auth>=s && auth<=e){
+            arr.splice(i,1);
+            if(auth>s) arr.splice(i,0,[s,auth-1]);
+            if(auth<e) arr.splice(i,0,[auth+1,e]);
+            changed=true; break;
+          }
+        }
+        if(!changed) arr.push([auth,auth]);
+        selected.set(asym, mergeRanges(arr));
+      }
+      function clearSelected(){
+        selected.clear();
+        chainsMeta.forEach(meta => meta.items.forEach(x => x.el.classList.remove('sel')));
+        pdbeClearSelection(viewer);
       }
       function paintSelected(){
-        chainsMeta.forEach((meta,asym)=>{
-          meta.items.forEach(x=>x.el.classList.remove('sel'));
-          const arr=selected.get(asym)||[]; const mark=new Set();
-          arr.forEach(([s,e])=>{for(let v=s;v<=e;v++) mark.add(v);});
-          meta.items.forEach(x=>{ if(mark.has(x.auth)) x.el.classList.add('sel'); });
+        chainsMeta.forEach((meta, asym) => {
+          meta.items.forEach(x => x.el.classList.remove('sel'));
+          const arr = selected.get(asym)||[];
+          if(!arr.length) return;
+          const mark = new Set(); arr.forEach(([s,e]) => { for(let v=s; v<=e; v++) mark.add(v); });
+          meta.items.forEach(x => { if(mark.has(x.auth)) x.el.classList.add('sel'); });
         });
-        const ranges=[]; selected.forEach((arr,asym)=>arr.forEach(([s,e])=>ranges.push({asym,start:s,end:e})));
-        ranges.length?pdbeSelectRanges(viewer,ranges):pdbeClearSelection(viewer);
+        const pdbeRanges=[];
+        selected.forEach((arr,asym)=>arr.forEach(([s,e])=>pdbeRanges.push({asym,start:s,end:e})));
+        if(pdbeRanges.length) pdbeSelectRanges(viewer, pdbeRanges); else pdbeClearSelection(viewer);
       }
-      function clearAll(){ selected.clear(); paintSelected(); }
 
-      chainsMeta.forEach((meta,asym)=>{
-        let dragging=false, anchor=-1, last=-1;
-        function clearDrag(){ meta.items.forEach(x=>x.el.classList.remove('drag')); }
-        function paintDrag(a,b){ clearDrag(); const [s,e]=normalize(a,b); for(let i=s;i<=e;i++) meta.items[i].el.classList.add('drag'); }
+      chainsMeta.forEach((meta, asym) => {
+        let dragging=false, anchorIdx=-1, lastIdx=-1;
 
-        meta.items.forEach((x,idx)=>{
-          const el=x.el;
-          el.addEventListener('mouseenter',()=>pdbeHighlight(viewer,x.asym,x.auth));
-          el.addEventListener('mouseleave',()=>pdbeClearHighlight(viewer));
-          el.addEventListener('mousedown',ev=>{ev.preventDefault(); dragging=true; anchor=idx; last=idx; meta.lastAnchorIdx=idx; paintDrag(anchor,idx);});
-          el.addEventListener('mousemove',()=>{if(dragging&&last!==idx){last=idx; paintDrag(anchor,last);}});
-          el.addEventListener('mouseup',ev=>{
-            if(!dragging) return; dragging=false; clearDrag();
-            const [sIdx,eIdx]=normalize(anchor,last);
-            if(ev.shiftKey && typeof meta.lastAnchorIdx==='number'){
-              const [sa,se]=normalize(meta.lastAnchorIdx,idx); addRangeIdx(asym,sa,se);
-            } else if(ev.metaKey||ev.ctrlKey){
-              addRangeIdx(asym,sIdx,eIdx);
+        function clearDragPaint(){ meta.items.forEach(x => x.el.classList.remove('drag')); }
+        function paintDrag(a,b){ clearDragPaint(); const [s,e]=normalizeRange(a,b); for(let i=s;i<=e;i++) meta.items[i].el.classList.add('drag'); }
+
+        meta.items.forEach((x, idx) => {
+          const el = x.el;
+
+          el.addEventListener('mouseenter', ()=> pdbeHighlight(viewer, x.asym, x.auth));
+          el.addEventListener('mouseleave', ()=> pdbeClearHighlight(viewer));
+
+          el.addEventListener('mousedown', (ev) => { ev.preventDefault(); dragging=true; anchorIdx=idx; lastIdx=idx; meta.lastAnchorIdx=idx; paintDrag(anchorIdx, idx); });
+          el.addEventListener('mousemove', () => { if(dragging && lastIdx!==idx){ lastIdx=idx; paintDrag(anchorIdx,lastIdx); } });
+          el.addEventListener('mouseup', (ev) => {
+            if(!dragging) return;
+            dragging=false; clearDragPaint();
+            const [sIdx,eIdx]=normalizeRange(anchorIdx,lastIdx);
+            if (ev.shiftKey && typeof meta.lastAnchorIdx === 'number') {
+              const [sa,se]=normalizeRange(meta.lastAnchorIdx, idx);
+              addRangeIdx(asym, sa, se);
+            } else if (ev.metaKey || ev.ctrlKey) {
+              addRangeIdx(asym, sIdx, eIdx);
             } else {
-              selected.clear(); addRangeIdx(asym,sIdx,eIdx);
+              selected.clear(); addRangeIdx(asym, sIdx, eIdx);
             }
             paintSelected();
           });
-          el.addEventListener('click',ev=>{
-            if(dragging) return;
-            if(ev.metaKey||ev.ctrlKey){ toggleSingleIdx(asym,idx); }
-            else if(ev.shiftKey && typeof meta.lastAnchorIdx==='number'){
-              const [sa,se]=normalize(meta.lastAnchorIdx,idx); selected.clear(); addRangeIdx(asym,sa,se);
+
+          el.addEventListener('click', (ev) => {
+            if (dragging) return;
+            if (ev.metaKey || ev.ctrlKey) {
+              toggleSingleIdx(asym, idx);
+            } else if (ev.shiftKey && typeof meta.lastAnchorIdx === 'number') {
+              const [sa,se]=normalizeRange(meta.lastAnchorIdx, idx);
+              selected.clear(); addRangeIdx(asym, sa, se);
             } else {
-              selected.clear(); addRangeIdx(asym,idx,idx); meta.lastAnchorIdx=idx;
+              selected.clear(); addRangeIdx(asym, idx, idx); meta.lastAnchorIdx=idx;
             }
             paintSelected();
           });
         });
-        meta.elRow.addEventListener('mouseleave',()=>{dragging=false; clearDrag();});
+
+        meta.elRow.addEventListener('mouseleave', ()=>{ dragging=false; clearDragPaint(); });
       });
-      container.addEventListener('mousedown',ev=>{ if(!ev.target.closest('.seq-res')) clearAll(); });
+
+      container.addEventListener('mousedown', (ev) => {
+        if (ev.target.closest('.seq-res')) return;
+        clearSelected();
+      });
+
+      return {
+        clear: clearSelected,
+        getSelectedRanges: () => {
+          const out=[]; selected.forEach((arr,asym)=>arr.forEach(([s,e])=>out.push({asym,start:s,end:e})));
+          return out;
+        }
+      };
     }
 
-    // FASTA fallback
-    function buildStripFromFasta(seqText, viewer){
-      const seq = seqText.split(/\r?\n/).filter(l=>!l.startsWith('>')).join('').replace(/\s+/g,'').trim();
-      const container=document.createElement('div');container.className='seq-strip';
-      const block=document.createElement('div');block.className='seq-chain';
-      const header=document.createElement('h4');header.textContent='Chain A (FASTA)';
-      const row=document.createElement('div');row.className='seq-row';
-      block.appendChild(header);block.appendChild(row);
-      const chainsMeta=new Map(); const items=[];
-      for(let i=0;i<seq.length;i++){
-        const auth=i+1, asym='A';
-        const sp=document.createElement('span');
-        sp.className='seq-res'; sp.textContent=seq[i]||'X';
-        sp.title=`${seq[i]||'X'} ${auth}`; sp.dataset.asym=asym; sp.dataset.auth=String(auth);
-        row.appendChild(sp); items.push({auth,asym,el:sp});
+    // FASTA strip (immediate fallback)
+    function buildStripFromFasta(seqText, viewer) {
+      const seq = seqText.split(/\r?\n/).filter(l => !l.startsWith('>')).join('\n').replace(/\s+/g,'').trim();
+
+      const container = document.createElement('div');
+      container.className = 'seq-strip';
+
+      const block = document.createElement('div'); block.className = 'seq-chain';
+      const header = document.createElement('h4'); header.textContent = 'Chain A (FASTA)';
+      const row = document.createElement('div'); row.className = 'seq-row';
+
+      block.appendChild(header); block.appendChild(row);
+
+      const chainsMeta = new Map(); const items = [];
+      for (let i = 0; i < seq.length; i++) {
+        const auth = i + 1; const asym = 'A';
+        const sp = document.createElement('span');
+        sp.className = 'seq-res'; sp.textContent = seq[i] || 'X';
+        sp.title = `${seq[i] || 'X'} ${auth}`;
+        sp.dataset.asym = asym; sp.dataset.auth = String(auth);
+        row.appendChild(sp); items.push({ auth, asym, el: sp });
       }
-      chainsMeta.set('A',{items,elRow:row,lastAnchorIdx:null});
+      chainsMeta.set('A', { items, elRow: row, lastAnchorIdx: null });
+
       container.appendChild(block);
-      enableDragSelect(container,chainsMeta,viewer);
+
+      const note = document.createElement('div'); note.className = 'muted';
+      note.textContent = 'Interactive sequence: hover, click, and drag to select residues.';
+      container.appendChild(note);
+
+      enableDragSelect(container, chainsMeta, viewer);
       return container;
     }
 
     // Model-based strip
-    function buildStripFromModel(model, viewer){
-      const {residues,chains}=model.atomicHierarchy||{};
-      if(!residues||!chains) return null;
-      const label_comp_id=residues.label_comp_id, auth_seq_id=residues.auth_seq_id,
-            chainIndex=residues.chainIndex, label_asym_id=chains.label_asym_id;
-      if(!label_comp_id||!auth_seq_id||!chainIndex||!label_asym_id) return null;
+    function buildStripFromModel(model, viewer) {
+      const { residues, chains } = model.atomicHierarchy || {};
+      if (!residues || !chains) return null;
 
-      const to1=aa3=>({ALA:'A',ARG:'R',ASN:'N',ASP:'D',CYS:'C',GLN:'Q',GLU:'E',GLY:'G',HIS:'H',ILE:'I',LEU:'L',LYS:'K',MET:'M',PHE:'F',PRO:'P',SER:'S',THR:'T',TRP:'W',TYR:'Y',VAL:'V',SEC:'U',PYL:'O'}[aa3?.toUpperCase()]||'X');
+      const label_comp_id = residues.label_comp_id;
+      const auth_seq_id   = residues.auth_seq_id;
+      const chainIndex    = residues.chainIndex;
+      const label_asym_id = chains.label_asym_id;
+      if (!label_comp_id || !auth_seq_id || !chainIndex || !label_asym_id) return null;
 
-      const perChain=new Map(); const n=residues._rowCount|0;
-      for(let r=0;r<n;r++){
-        const cIdx=chainIndex[r];
-        const asym=label_asym_id.value(cIdx);
-        const comp3=label_comp_id.value(r);
-        const auth=auth_seq_id.value(r);
-        if(!perChain.has(asym)) perChain.set(asym,[]);
-        perChain.get(asym).push({one:to1(comp3),three:comp3,auth,asym});
+      const to1 = (aa3) => {
+        const m = {ALA:'A',ARG:'R',ASN:'N',ASP:'D',CYS:'C',GLN:'Q',GLU:'E',GLY:'G',HIS:'H',ILE:'I',LEU:'L',LYS:'K',MET:'M',PHE:'F',PRO:'P',SER:'S',THR:'T',TRP:'W',TYR:'Y',VAL:'V',SEC:'U',PYL:'O'};
+        return m[aa3?.toUpperCase()] || 'X';
+      };
+
+      const perChain = new Map(); // asym -> list
+      const nResidues = residues._rowCount | 0;
+      for (let rI = 0; rI < nResidues; rI++) {
+        const cIdx  = chainIndex[rI];
+        const asym  = label_asym_id.value(cIdx);
+        const comp3 = label_comp_id.value(rI);
+        const auth  = auth_seq_id.value(rI);
+        if (!perChain.has(asym)) perChain.set(asym, []);
+        perChain.get(asym).push({ one: to1(comp3), three: comp3, auth, asym });
       }
 
-      const container=document.createElement('div');container.className='seq-strip';
-      const chainsMeta=new Map();
+      const container = document.createElement('div');
+      container.className = 'seq-strip';
 
-      perChain.forEach((list,asym)=>{
-        const block=document.createElement('div');block.className='seq-chain';
-        const header=document.createElement('h4');header.textContent=`Chain ${asym}`;
-        const row=document.createElement('div');row.className='seq-row';
-        block.appendChild(header);block.appendChild(row);
+      const chainsMeta = new Map();
+      perChain.forEach((list, asym) => {
+        const block = document.createElement('div'); block.className = 'seq-chain';
+        const header = document.createElement('h4'); header.textContent = `Chain ${asym}`;
+        const row = document.createElement('div'); row.className = 'seq-row';
+        block.appendChild(header); block.appendChild(row);
 
-        const items=[];
-        list.forEach(res=>{
-          const sp=document.createElement('span');
-          sp.className='seq-res'; sp.textContent=res.one;
-          sp.title=`${res.three} ${res.auth}`;
-          sp.dataset.asym=res.asym; sp.dataset.auth=String(res.auth);
-          row.appendChild(sp); items.push({auth:res.auth,asym:res.asym,el:sp});
+        const items = [];
+        list.forEach(res => {
+          const sp = document.createElement('span');
+          sp.className = 'seq-res';
+          sp.textContent = res.one;
+          sp.title = `${res.three} ${res.auth}`;
+          sp.dataset.asym = res.asym;
+          sp.dataset.auth = String(res.auth);
+          row.appendChild(sp);
+          items.push({ auth: res.auth, asym: res.asym, el: sp });
         });
 
-        chainsMeta.set(asym,{items,elRow:row,lastAnchorIdx:null});
+        chainsMeta.set(asym, { items, elRow: row, lastAnchorIdx: null });
         container.appendChild(block);
       });
 
-      enableDragSelect(container,chainsMeta,viewer);
+      enableDragSelect(container, chainsMeta, viewer);
       return container;
     }
 
-    async function waitForModel(viewer,timeoutMs=12000){
-      const start=performance.now(); const plugin=viewer?.viewerInstance?.plugin;
-      while(performance.now()-start<timeoutMs){
-        const hier=plugin?.managers?.structure?.hierarchy?.current;
-        const sRef=hier?.structures?.[0];
-        const structure=sRef?.cell?.obj?.data?.structure;
-        const model=structure?.models?.[0];
-        if(model?.atomicHierarchy) return model;
-        await new Promise(r=>setTimeout(r,120));
+    async function waitForModel(viewer, timeoutMs=12000) {
+      const start = performance.now();
+      const plugin = viewer?.viewerInstance?.plugin;
+      while (performance.now() - start < timeoutMs) {
+        const hier = plugin?.managers?.structure?.hierarchy?.current;
+        const sRef = hier?.structures?.[0];
+        const structure = sRef?.cell?.obj?.data?.structure;
+        const model = structure?.models?.[0];
+        if (model?.atomicHierarchy) return model;
+        await new Promise(r => setTimeout(r, 120));
       }
       return null;
     }
 
-    async function downloadFile(url,name){
+    // Save helper (forces download via Blob)
+    async function downloadFile(url, filenameFallback) {
       try {
-        const r=await fetch(url,{cache:'no-store'});
-        if(!r.ok) throw 0;
-        const b=await r.blob();
-        const a=document.createElement('a');
-        a.href=URL.createObjectURL(b);
-        a.download=name;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) throw new Error('Network error');
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filenameFallback;
         document.body.appendChild(a);
         a.click();
         URL.revokeObjectURL(a.href);
         a.remove();
-      } catch {
-        alert('Download failed.');
+      } catch (e) {
+        alert('Download failed. Please try again.');
       }
     }
 
     async function load(){
-      const uid=getParam('uid');
-      const titleEl=document.getElementById('title');
-      const seqBody=document.getElementById('seq-body');
-      const seqErr=document.getElementById('seq-error');
-      const viewerErr=document.getElementById('viewer-error');
-      const copyBtn=document.getElementById('copyBtn');
-      const dlCifBtn=document.getElementById('dlCifBtn');
-      const dlFastaBtn=document.getElementById('dlFastaBtn');
-      const dropdown=document.getElementById('downloadDropdown');
-      const downloadBtn=document.getElementById('downloadBtn');
+      const uid = getParam('uid');
+      const titleEl  = document.getElementById('title');
+      const viewerErr= document.getElementById('viewer-error');
+      const seqErr   = document.getElementById('seq-error');
+      const seqBody  = document.getElementById('seq-body');
 
-      titleEl.textContent=uid||'(missing uid)';
+      const copyBtn  = document.getElementById('copyBtn');
+      const dlCifBtn = document.getElementById('dlCifBtn');
+      const dlFastaBtn = document.getElementById('dlFastaBtn');
+      const dropdown = document.getElementById('downloadDropdown');
+      const downloadBtn = document.getElementById('downloadBtn');
 
-      // Dropdown behavior
-      const closeDrop=()=>dropdown.classList.remove('open');
-      const toggleDrop=()=>dropdown.classList.toggle('open');
-      downloadBtn.addEventListener('click',e=>{e.stopPropagation();toggleDrop();});
-      document.addEventListener('click',closeDrop);
+      titleEl.textContent = uid || '(missing uid)';
 
-      // Catalog
+      // Dropdown wiring
+      function closeDropdown(){ dropdown.classList.remove('open'); }
+      function toggleDropdown(){ dropdown.classList.toggle('open'); }
+      downloadBtn.addEventListener('click', (e)=>{ e.stopPropagation(); toggleDropdown(); });
+      document.addEventListener('click', closeDropdown);
+
+      // Load catalog
       let catalog;
       try {
-        catalog = await fetch('../data/entries.json?v='+Date.now()).then(r=>r.json());
+        catalog = await fetch('../data/entries.json?v=' + Date.now()).then(r=>r.json());
       } catch {
-        viewerErr.style.display='block'; seqErr.style.display='block';
-        viewerErr.textContent='Could not load entries.json.';
-        seqErr.textContent='Could not load entries.json.';
+        viewerErr.style.display = seqErr.style.display = 'block';
+        viewerErr.textContent = seqErr.textContent = 'Could not load entries.json.';
         return;
       }
 
-      const entry=(catalog.entries||[]).find(e=>e.uniprot_id===uid);
+      const entry = (catalog.entries || []).find(e => e.uniprot_id === uid);
       if(!entry){
-        viewerErr.style.display='block'; seqErr.style.display='block';
-        viewerErr.textContent='Entry not found in catalog.';
-        seqErr.textContent='Entry not found in catalog.';
+        viewerErr.style.display = seqErr.style.display = 'block';
+        viewerErr.textContent = seqErr.textContent = 'Entry not found in catalog.';
         return;
       }
 
-      const cifUrl  = entry.files.structure_cif;
-      const fastaUrl= entry.files.sequence_fasta;
+      const cifUrl   = entry.files.structure_cif;
+      const fastaUrl = entry.files.sequence_fasta;
 
-      // Copy Sequence (strip headers & whitespace)
+      // Pull FASTA (for fallback + copy)
+      let fastaText = '';
+      try {
+        fastaText = await fetch(fastaUrl, { cache: 'no-store' }).then(r=>r.text());
+      } catch {
+        seqErr.style.display = 'block';
+        seqErr.textContent = 'FASTA not available.';
+      }
+
+      // Copy Sequence (no header)
       copyBtn.onclick = async () => {
+        const seqOnly = (fastaText || '')
+          .split(/\r?\n/)
+          .filter(l => !l.startsWith('>'))
+          .join('\n')
+          .replace(/\s+/g, '')
+          .trim();
+        if (!seqOnly) { return; }
         try {
-          const t = await fetch(fastaUrl).then(r=>r.text());
-          const seq = t.split(/\r?\n/).filter(l=>!l.startsWith('>')).join('').replace(/\s+/g,'');
-          await navigator.clipboard.writeText(seq);
-          const prev=copyBtn.textContent; copyBtn.textContent='Copied!';
-          setTimeout(()=>copyBtn.textContent=prev,1200);
-        } catch {
-          alert('Could not copy sequence.');
-        }
+          await navigator.clipboard.writeText(seqOnly);
+          const prev = copyBtn.textContent; copyBtn.textContent = 'Copied!';
+          setTimeout(()=> (copyBtn.textContent = prev), 1200);
+        } catch {}
       };
 
-      // Downloads (true download, no in-tab view)
-      dlCifBtn.onclick   = () => downloadFile(cifUrl,   (uid||'structure') + '.cif');
-      dlFastaBtn.onclick = () => downloadFile(fastaUrl, (uid||'sequence')  + '.fasta');
+      // Download handlers (force download via Blob)
+      const cifName = (() => {
+        const urlLower = cifUrl.toLowerCase();
+        const ext = urlLower.endsWith('.cif') && !urlLower.endsWith('.mmcif') ? '.cif' : '.mmcif';
+        return (uid || 'structure') + ext;
+      })();
+      const fastaName = (uid || 'sequence') + '.fasta';
 
-      // Viewer
-      const fmt=(cifUrl.toLowerCase().endsWith('.cif') && !cifUrl.toLowerCase().endsWith('.mmcif')) ? 'cif' : 'mmcif';
+      dlCifBtn.onclick = async () => { closeDropdown(); await downloadFile(cifUrl, cifName); };
+      dlFastaBtn.onclick = async () => { closeDropdown(); await downloadFile(fastaUrl, fastaName); };
 
-      let viewer;
-      try { viewer=new PDBeMolstarPlugin(); }
-      catch { viewerErr.style.display='block'; viewerErr.textContent='Failed to create PDBe Mol* plugin.'; return; }
+      // Init PDBe Mol*
+      const fmt = (cifUrl.toLowerCase().endsWith('.cif') && !cifUrl.toLowerCase().endsWith('.mmcif')) ? 'cif' : 'mmcif';
+      let pdbe;
+      try { pdbe = new PDBeMolstarPlugin(); }
+      catch {
+        viewerErr.style.display = 'block';
+        viewerErr.textContent = 'Failed to create PDBe Mol* plugin.';
+        return;
+      }
 
-      const options={ customData:{url:cifUrl,format:fmt}, hideControls:true, expanded:false, bgColor:{r:255,g:255,b:255} };
+      try {
+        pdbe.render('viewer', {
+          customData: { url: cifUrl, format: fmt },
+          hideControls: true, expanded: false,
+          bgColor: { r:255, g:255, b:255 }
+        });
+      } catch {
+        viewerErr.style.display = 'block';
+        viewerErr.textContent = 'Mol* render error.';
+        return;
+      }
 
-      try { viewer.render('viewer', options); }
-      catch { viewerErr.style.display='block'; viewerErr.textContent='Mol* render error.'; return; }
-
-      // Re-hide any UI chrome that appears late
-      const root=document.getElementById('viewer');
-      const hideChrome=()=>{
-        ['.msp-left-panel','.msp-right-panel','.msp-bottom-panel','.msp-layout-controls','.msp-viewport-controls','.msp-plugin-ui','.msp-controls','.msp-controls-wrapper','.msp-help-toast']
-          .forEach(sel=>document.querySelectorAll(sel).forEach(el=>{el.style.display='none';el.style.visibility='hidden';el.style.pointerEvents='none';}));
+      // Hide chrome defensively
+      const root = document.getElementById('viewer');
+      const hideChrome = () => {
+        [
+          '.msp-left-panel','.msp-right-panel','.msp-bottom-panel',
+          '.msp-layout-controls','.msp-viewport-controls',
+          '.msp-plugin-ui','.msp-controls','.msp-controls-wrapper','.msp-help-toast'
+        ].forEach(sel => { document.querySelectorAll(sel).forEach(el => { el.style.display='none'; el.style.visibility='hidden'; el.style.pointerEvents='none'; }); });
       };
-      hideChrome(); setTimeout(hideChrome,120); setTimeout(hideChrome,600);
-      new MutationObserver(hideChrome).observe(root,{childList:true,subtree:true});
+      hideChrome(); setTimeout(hideChrome, 100); setTimeout(hideChrome, 500);
+      new MutationObserver(hideChrome).observe(root, { childList:true, subtree:true });
 
-      // Nice visuals
-      function styleScene(){
+      // Soft lighting + outline
+      function styleScene() {
         try {
-          const plugin=viewer?.viewerInstance?.plugin;
-          const c3d=plugin?.canvas3d;
-          if(c3d?.setProps){
+          const plugin = pdbe?.viewerInstance?.plugin;
+          const c3d = plugin?.canvas3d;
+          if (c3d?.setProps) {
             c3d.setProps({
-              renderer:{ ambientIntensity:0.6 },
-              postprocessing:{ outline:{ enable:true, scale:1.0, threshold:0.8 } }
+              renderer: { ambientIntensity: 0.6 },
+              postprocessing: { outline: { enable: true, scale: 1.0, threshold: 0.8 } }
             });
           }
         } catch {}
       }
-      setTimeout(styleScene,400);
-      setTimeout(styleScene,1200);
+      setTimeout(styleScene, 400);
+      setTimeout(styleScene, 1200);
 
-      // Build interactive sequence from model, fallback to FASTA
-      const model = await waitForModel(viewer, 12000);
-      if(model){
-        const strip = buildStripFromModel(model, viewer);
-        if(strip){ seqBody.innerHTML=''; seqBody.appendChild(strip); return; }
+      // 1) FASTA interactive fallback immediately (if we have it)
+      if (fastaText) {
+        seqBody.innerHTML = '';
+        seqBody.appendChild(buildStripFromFasta(fastaText, pdbe));
+      } else {
+        const p = document.createElement('div');
+        p.className = 'muted';
+        p.textContent = 'Waiting for structure…';
+        seqBody.innerHTML = ''; seqBody.appendChild(p);
       }
-      try {
-        const fastaText = await fetch(fastaUrl).then(r=>r.text());
-        const strip = buildStripFromFasta(fastaText, viewer);
-        seqBody.innerHTML=''; seqBody.appendChild(strip);
-      } catch {
-        seqErr.style.display='block'; seqErr.textContent='Sequence not available.';
+
+      // 2) Upgrade to model-based interactive strip when ready
+      const model = await waitForModel(pdbe, 12000);
+      if (model) {
+        const strip = buildStripFromModel(model, pdbe);
+        if (strip) { seqBody.innerHTML = ''; seqBody.appendChild(strip); }
       }
     }
 
